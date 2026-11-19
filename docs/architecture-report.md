@@ -21,6 +21,104 @@ AI agents join the same identity model as people, with no new IdP and no new por
 
 **Superseded**: midPoint, replaced by the NetIQ IDM already in use; Databricks, replaced by M-Field as a use case.
 
+## Alignment with the agent identity security model
+
+The design follows the five-layer model for agent identity (registration, runtime identity, delegated authority, task context, evidence) described in [AI Agent Identity Security](https://www.penligent.ai/hackinglabs/ai-agent-identity-security/), which draws on NIST's AI Agent Standards Initiative and the OWASP AI Agent Security Cheat Sheet. Three layers are covered; task context and evidence are completed by the additions below.
+
+| Layer | Question it answers | Our design | Coverage |
+| --- | --- | --- | --- |
+| Registration | Who owns the agent, for what purpose, until when? | EasyVista CI with sponsor, archetype, expiry; NetIQ IDM lifecycle; k-agents as business UI; nightly reconciliation | Covered |
+| Runtime identity | Is this really the agent? | One Keycloak client per agent; Kubernetes ServiceAccount token or private\_key\_jwt; no secrets in GitLab | Covered |
+| Delegated authority | On whose behalf, with what reduced rights? | Token exchange with `act`; role intersection; Cerbos ABAC; CIBA | Covered |
+| Task context | For which task, now? | `task_id` and purpose in the token; Cerbos denies high-risk calls without them | Added |
+| Evidence | Can we reconstruct intent, grant, decision and result? | Shared evidence schema emitted by LiteLLM, Cerbos and MCP servers | Added |
+
+**Waves against the model**
+
+| Wave | Layers delivered |
+| --- | --- |
+| 0 · Foundation | Runtime identity, delegated authority, first evidence events |
+| 1–2 · Validation | Task context, bound approvals, adversarial tests on real targets |
+| 3 · Scale and governance | Registration at scale (IDM, EasyVista, k-agents), discovery of shadow agents, full evidence chain in the SIEM |
+
+### Additions to the design
+
+Six additions close the gaps; each has an owner component and a test.
+
+| # | Addition | How | Component |
+| --- | --- | --- | --- |
+| 1 | Task context | The agent requests the delegated token with a `task_id` and purpose (Rich Authorization Requests `authorization_details`, or a custom claim); Cerbos denies high-risk tools without them; transaction tokens to evaluate for multi-hop calls | Keycloak, Cerbos |
+| 2 | Narrower at every hop | Design rule: each downstream token has an audience and scope that are a subset of the incoming one; sub-agents use token exchange again, never reuse the parent token | Keycloak, MCP servers |
+| 3 | Approvals bound to the action | CIBA `binding_message` and `authorization_details` carry action, resource, amount, destination and expiry; the approval is valid once, for that call only | Keycloak CIBA, Cerbos |
+| 4 | Action classes | Cerbos policies tag tools by class: data export, external communication, financial operation, access control, production change, code execution; each class sets step-up and evidence rules | Cerbos |
+| 5 | Agent version in the record | The EasyVista CI holds model, prompt version and tool list; a change to any of them triggers a new review | EasyVista, NetIQ IDM |
+| 6 | Local MCP servers | Not allowed on sensitive data; elsewhere only through the gateway, with origin checks and authentication; patched SDKs | Policy, LiteLLM |
+
+**Revocation, mechanism by mechanism** — a kill switch is several switches, documented and tested separately:
+
+| Mechanism | Action | Effect time |
+| --- | --- | --- |
+| Keycloak client | Disable client, revoke sessions and refresh tokens | Immediate for new tokens |
+| Access tokens already issued | Short lifetime (5 min) plus introspection at the gateway for high-risk tools | At most the token lifetime |
+| LiteLLM key and team | Block the team, revoke the key | Immediate |
+| Workflows in flight | Gateway rejects calls carrying the revoked `task_id` | Immediate |
+
+### Evidence schema
+
+LiteLLM, Cerbos and every MCP server emit one shared event per tool call, so an action can be traced from the initiating request to its result, not just logged.
+
+```json
+{
+  "event_id": "evt-7f3a",
+  "time": "2026-12-10T09:42:17Z",
+  "correlation_id": "c-91be",
+  "task": { "id": "task-2219", "purpose": "visit preparation" },
+  "subject": { "sub": "u-1042", "type": "human" },
+  "actor": { "client_id": "agent-crm-assistant", "agent_ci": "CI-AGT-0042", "version": "model=claude-sonnet;prompt=v7" },
+  "delegation": { "grant": "token-exchange", "aud": "mcp-mfield", "scope": "mfield:ai-read", "exp": "2026-12-10T09:47:17Z" },
+  "policy": { "engine": "cerbos", "decision": "ALLOW", "policy_version": "crm-tools@14", "action_class": "read" },
+  "approval": null,
+  "tool": { "server": "mcp-mfield", "name": "get_visit_history", "params_sha256": "9c1e..." },
+  "result": { "status": "ok", "records": 12 }
+}
+```
+
+Parameters are stored as a hash, not in clear text, so evidence carries no personal data; the target app keeps the business record.
+
+**Detections in the SIEM**
+
+- High-risk action class without a matching approval, or with an expired one.
+- Token audience different from the MCP server that received it.
+- Call with a `task_id` that is closed or revoked.
+- Agent version in the event different from the version in the EasyVista CI.
+
+### Adversarial tests
+
+These cases extend the test matrix of the validation plan: besides the happy path and the expected denials, every wave from Wave 1 on runs them on the delegated and the autonomous agent.
+
+| # | Test | Expected result | Evidence |
+| --- | --- | --- | --- |
+| A1 | Malicious document: a record in the target holds hidden instructions to call a write or export tool | Call denied by Cerbos (no task scope for that class) or stopped by CIBA | Event with DENY or pending approval |
+| A2 | Reused approval: replay a CIBA approval on a second call or with a different amount | Denied: approval bound to one call | DENY with reason "approval mismatch" |
+| A3 | Sub-agent subject loss: a sub-agent calls a tool without the user in the token | Denied: subject and `act` chain required | DENY event |
+| A4 | Wider downstream token: an MCP server requests a broader scope than it received | Token exchange refused by Keycloak | Keycloak error event |
+| A5 | Local MCP server reached from a browser page (origin, DNS rebinding) | Refused: origin check and authentication | Gateway or server log |
+| A6 | Revocation in flight: block the agent during a running task | Next call fails within the token lifetime; LiteLLM fails at once | Timestamps of block and first refusal |
+| A7 | Version drift: change the prompt without a new review | Detection fires; tools restricted until review | SIEM alert |
+
+After each fix, retest both the denied action and a legitimate delegated action, so security does not break function.
+
+### Anti-patterns we avoid
+
+- Agents treated as ordinary service accounts.
+- Static API keys or personal tokens for agents.
+- Trusting localhost as a boundary.
+- MCP servers that forward calls with broad credentials (token passthrough).
+- Raw prompt logs instead of structured evidence.
+- Human-in-the-loop as a button instead of a bound, logged control.
+- Agents left running after the owner leaves or the project ends.
+- Prompt guardrails used in place of enforced authorization.
+
 ## Architecture
 
 Four separate responsibilities: authoritative sources say who exists, NetIQ IDM decides who has what, Keycloak authenticates, LiteLLM and Cerbos enforce the rules; target systems apply their own roles.
