@@ -23,6 +23,18 @@ AI agents join the same identity model as people, with no new IdP and no new por
 
 ## Alignment with the agent identity security model
 
+> **"Policies fail under pressure. Architecture holds."**
+
+**Our design principles**
+
+- **"Govern the agent before its first tool call, not after its first incident."**
+- **"Every agent has a name, an owner and an expiry date."**
+- **"Authority only shrinks along the chain."**
+- **"Two identities on every call: who asked, and who acted."**
+- **"Approve the action, not the agent."**
+- **"A log says it happened. Evidence says why, for whom, under which grant."**
+- **"Test the authority, not just the prompt."**
+
 The design follows the five-layer model for agent identity (registration, runtime identity, delegated authority, task context, evidence) described in [AI Agent Identity Security](https://www.penligent.ai/hackinglabs/ai-agent-identity-security/), which draws on NIST's AI Agent Standards Initiative and the OWASP AI Agent Security Cheat Sheet. Three layers are covered; task context and evidence are completed by the additions below.
 
 | Layer | Question it answers | Our design | Coverage |
@@ -79,6 +91,8 @@ Reference diagrams in the article: [identity model comparison](https://www.penli
 | Transaction-bound token | To evaluate for high-risk, multi-hop calls |
 
 ### Six components, governed before the first tool call
+
+> **"Govern the agent before its first tool call, not after its first incident."**
 
 The reference model sets six components that must be in place before an agent can call any tool. All six map to an existing part of our design; authorization becomes a decision taken at every call, not a permission assigned once.
 
@@ -138,6 +152,8 @@ The `active_agent` derived role checks that the agent has an active CI, an owner
 
 ### Additions to the design
 
+> **"Authority only shrinks along the chain."**
+
 Six additions close the gaps; each has an owner component and a test.
 
 | # | Addition | How | Component |
@@ -159,6 +175,8 @@ Six additions close the gaps; each has an owner component and a test.
 | Workflows in flight | Gateway rejects calls carrying the revoked `task_id` | Immediate |
 
 ### Evidence schema
+
+> **"A log says it happened. Evidence says why, for whom, under which grant."**
 
 LiteLLM, Cerbos and every MCP server emit one shared event per tool call, so an action can be traced from the initiating request to its result, not just logged.
 
@@ -241,6 +259,8 @@ These queries only work on structured evidence; raw HTTP or prompt logs cannot a
 
 ### Identity validation workflow
 
+> **"Test the authority, not just the prompt."**
+
 Tests target identity and authority, not only prompts: the question is whether hostile input can make the agent use real authority wrongly. Each step of the reference workflow maps to a part of our validation plan.
 
 | Step | What we check | Our test |
@@ -260,6 +280,8 @@ Tests run only on systems we own or are authorized to test, with synthetic ident
 
 ### Adversarial tests
 
+> **"If we haven't tried to break it, we don't know it holds."**
+
 These cases extend the test matrix of the validation plan: besides the happy path and the expected denials, every wave from Wave 1 on runs them on the delegated and the autonomous agent.
 
 | # | Test | Expected result | Evidence |
@@ -275,6 +297,8 @@ These cases extend the test matrix of the validation plan: besides the happy pat
 After each fix, retest both the denied action and a legitimate delegated action, so security does not break function.
 
 ### Anti-patterns we avoid
+
+> **"Shortcuts are where agents go wrong."**
 
 - Agents treated as ordinary service accounts.
 - Static API keys or personal tokens for agents.
@@ -1223,6 +1247,8 @@ Wave 3 replaces the hand-applied configuration of Waves 0–2 with the governed 
 - Go-live criteria: H1–H6 passed per target, penetration test, DPIA, security review.
 
 ## Critical review
+
+> **"Build on what we already run; replace only what we can't trust."**
 
 The design holds because it extends what the company already runs: Keycloak is the SSO of all seven targets, NetIQ IDM is the single engine, Cerbos does fine-grained authorization. The weak points are LiteLLM as a single trust point, a slow revocation path, and three blind spots.
 
