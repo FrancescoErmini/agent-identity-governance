@@ -403,24 +403,63 @@ An agent starts from a request in EasyVista and becomes operational only after a
 id: agt-0042
 name: crm-assistant
 easyvista_ci: CI-AGT-0042
-sponsor: maria.rossi@acme.it
-owner_team: team-crm-digital
+owners:
+  business: maria.rossi@acme.it        # sponsor, accountable for purpose and risk
+  technical: team-crm-digital           # runs and fixes the agent
+purpose: Visit preparation and draft visit notes for sales reps
 archetype: crm-assistant-read
-mode: delegated              # autonomous | delegated
-expires: 2027-05-31
+mode: delegated                         # autonomous | delegated
+
+runtime:
+  environment: production
+  platform: kubernetes
+  namespace: ai-agents
+  service_account: crm-assistant
+  workload_identity: system:serviceaccount:ai-agents:crm-assistant
+
+model_context:
+  models: [claude-sonnet]
+  agent_version: 2026.12.01
+  prompt_version: v7
+  tool_policy_version: mcp_tool@14      # Cerbos policy version
+
 keycloak:
   client_id: agent-crm-assistant
-  auth: federated-k8s        # federated-k8s | private_key_jwt
-  optional_scopes: ["mfield:ai-read"]
+  auth: federated-k8s                   # federated-k8s | private_key_jwt
+  default_scopes: ["mfield:ai-read"]
+  optional_scopes: ["mfield:ai-write"]
+  max_token_ttl_s: 300
+
+delegation:
+  allowed_to_delegate: false            # no sub-agents
+  requires_actor_chain: true            # sub + act on every delegated token
+  delegated_from: demo-crm-ui           # where user sessions come from
+
 litellm:
   team: crm-ai
-  models: [claude-sonnet]
-  mcp_tools:
-    m-field: [search_accounts, get_visit_history, draft_visit_note]
   max_budget_eur_month: 200
+  mcp_tools:
+    m-field:
+      allowed: [search_accounts, get_visit_history, draft_visit_note]
+      denied: [export_accounts, delete_note, send_external_email]
+
 cerbos:
   attributes: { bu: commercial-it, data_class: hcp-personal }
+  step_up_required_for: [export, external_comm]   # action classes needing CIBA approval
+
+evidence:
+  stream: agent-evidence-prod
+  chain_required: true
+  retention_days: 365
+
+lifecycle:
+  created: 2026-12-01
+  last_review: 2026-12-01
+  next_review: 2027-03-01               # quarterly recertification
+  expires: 2027-05-31
 ```
+
+Every block maps to one component: `keycloak` to the client and scopes, `litellm` to the team and tool allow and deny lists, `cerbos` to the attributes and step-up classes, `evidence` to the SIEM stream, `lifecycle` to the EasyVista CI and NetIQ recertification. A change to `model_context` triggers a new review.
 
 **The GitLab CI pipeline**
 
