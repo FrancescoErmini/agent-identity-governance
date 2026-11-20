@@ -35,6 +35,19 @@ AI agents join the same identity model as people, with no new IdP and no new por
 - **"A log says it happened. Evidence says why, for whom, under which grant."**
 - **"Test the authority, not just the prompt."**
 
+**Watchwords**
+
+- **"Valid token, wrong action: the risk that looks like normal traffic."**
+- **"No owner, no production."**
+- **"Identity says who. Policy says what, now, for this task."**
+- **"No passthrough. Ever."**
+- **"Local doesn't mean trusted."**
+- **"Human-in-the-loop is a control, not a button."**
+- **"A kill switch is many switches."**
+- **"Retire agents as carefully as you create them."**
+- **"Guardrails advise. Authorization decides."**
+- **"Every change to model, prompt or tools is a new agent until reviewed."**
+
 The design follows the five-layer model for agent identity (registration, runtime identity, delegated authority, task context, evidence) described in [AI Agent Identity Security](https://www.penligent.ai/hackinglabs/ai-agent-identity-security/), which draws on NIST's AI Agent Standards Initiative and the OWASP AI Agent Security Cheat Sheet. Three layers are covered; task context and evidence are completed by the additions below.
 
 | Layer | Question it answers | Our design | Coverage |
@@ -164,6 +177,8 @@ Six additions close the gaps; each has an owner component and a test.
 | 4 | Action classes | Cerbos policies tag tools by class: data export, external communication, financial operation, access control, production change, code execution; each class sets step-up and evidence rules | Cerbos |
 | 5 | Agent version in the record | The EasyVista CI holds model, prompt version and tool list; a change to any of them triggers a new review | EasyVista, NetIQ IDM |
 | 6 | Local MCP servers | Not allowed on sensitive data; elsewhere only through the gateway, with origin checks and authentication; patched SDKs | Policy, LiteLLM |
+
+> **"A kill switch is many switches."**
 
 **Revocation, mechanism by mechanism** — a kill switch is several switches, documented and tested separately:
 
@@ -311,6 +326,8 @@ After each fix, retest both the denied action and a legitimate delegated action,
 
 ## Architecture
 
+> **"One IdP, one engine, one gateway: every request through the same door."**
+
 Four separate responsibilities: authoritative sources say who exists, NetIQ IDM decides who has what, Keycloak authenticates, LiteLLM and Cerbos enforce the rules; target systems apply their own roles.
 
 &#91;embedded content: architecture · sources, IDM, Keycloak, gateway, targets\]
@@ -331,6 +348,8 @@ Dashed lines are configuration, keys and tokens; solid lines are request traffic
 | SIEM | Log correlation by correlation ID | Keycloak, LiteLLM, Cerbos, targets |
 
 ## People and agents compared
+
+> **"Same process for people and agents. Only the source changes."**
 
 The agent process mirrors the established process for people: only the authoritative source changes (EasyVista instead of HR), plus one extra step, the GitLab CI pipeline that creates the Keycloak client and the gateway configuration.
 
@@ -356,6 +375,8 @@ NetIQ IDM, eDirectory and Keycloak are shared by both paths; for agents only the
 Two differences really matter: an agent always has an expiry (people don't), and an agent never holds credentials a human could reuse.
 
 ## How an agent is born
+
+> **"No request, no agent. No merge, no access."**
 
 An agent starts from a request in EasyVista and becomes operational only after an approved merge request in GitLab: every step leaves a trace, and nobody creates clients or permissions by hand.
 
@@ -417,6 +438,8 @@ cerbos:
 
 ## Lifecycle and reconciliation
 
+> **"Agents expire by default. Renewal is a decision."**
+
 Every change follows the same path as creation (EasyVista → NetIQ IDM → merge request → GitLab CI); the only exception is the emergency block, which acts at once and is regularised afterwards.
 
 | Event | Who starts it | What happens |
@@ -438,6 +461,8 @@ It is the protection against “shadow” agents and it compensates for CMDB qua
 
 ## Who uses an agent and how it authenticates
 
+> **"The agent never has more than the person behind it."**
+
 An agent works in one of two modes, and the mode decides which identity reaches the target system: its own (autonomous agent) or that of the user it works for (delegated agent).
 
 | Mode | Who uses it | Token | Identity seen by the target | Detail |
@@ -450,6 +475,8 @@ An agent works in one of two modes, and the mode decides which identity reaches 
 In every case the call goes through LiteLLM, which verifies the token, applies RBAC and asks Cerbos for the ABAC decision before touching an MCP server. The full HTTP requests are in the annexes.
 
 ## Why Keycloak: integrating with what exists
+
+> **"Extend the IdP we have; don't add one we must trust."**
 
 Keycloak is already the IdP of every application: adding agents as new clients of the same realm means applications receive tokens with the same issuer, the same keys and the same role claims they already know how to validate. Scopes and audiences are added; the login of people does not change.
 
@@ -518,6 +545,8 @@ The same pattern applies wherever a target's API can trust a Keycloak token: Sal
 
 ## RBAC, ABAC and policy
 
+> **"Roles open the door. Attributes decide how far you go."**
+
 RBAC decides in advance who can do what, based on the roles assigned by the IDM; ABAC decides on every call, based on the attributes of the request. Both are code in GitLab, with tests and approvals, and each layer has a different owner.
 
 &#91;embedded content: decision chain · 5 layers, each with its owner\]
@@ -584,6 +613,8 @@ guardrails:
 **OPA as an alternative** — If OPA is preferred only the engine changes: same enforcement point (LiteLLM guardrail), same inputs, policies in Rego instead of YAML/CEL, same tests in GitLab CI.
 
 ## Granularity of MCP permissions towards targets
+
+> **"Small tools, small blast radius."**
 
 An agent's permissions towards a target system narrow across eight levels, from coarsest to finest. The two most robust are tool design and the role on the target, because no prompt can get around them; the others cut risk before the call gets there.
 
@@ -708,6 +739,8 @@ With one external client app per agent, Salesforce tells the channel apart nativ
 
 ## Audit: telling person and agent apart
 
+> **"If it isn't in the evidence, it didn't happen safely."**
+
 Every action can be traced from request to data through a correlation ID generated by LiteLLM and passed to the MCP server and, where possible, to the target; whether the target itself tells person and agent apart depends on the system.
 
 | System | What it records | Person / agent distinction |
@@ -725,6 +758,8 @@ Every action can be traced from request to data through a correlation ID generat
 All logs flow into the SIEM (e.g. Google SecOps). Sensitive fields in decision logs and prompt contents are excluded or masked by default; what to retain is decided with the DPO and compliance (GDPR, GxP).
 
 ## Validating the hypotheses
+
+> **"Prove it on real systems before we scale it."**
 
 The design holds only if six hypotheses survive tests on seven target systems, each in two modes: an agent acting for a person (delegated) and an autonomous agent. A hypothesis passes when the allowed call works, every forbidden call is refused at the layer the design names, and the audit trail tells person and agent apart.
 
@@ -792,6 +827,8 @@ Pass rule: a target gets write tools only when H1–H5 pass for it. A target tha
 
 ## Risks and open points
 
+> **"Name the risk, assign the owner, set the fallback."**
+
 | Risk / limit | Mitigation |
 | --- | --- |
 | Delegation with `act` in preview (Keycloak 26.8) | Development only; in production trace `sub` + `azp` until it is supported |
@@ -819,6 +856,8 @@ Pass rule: a target gets write tools only when H1–H5 pass for it. A target tha
 - [ ] Legisway: is the API package licensed, and do API calls carry a named user's rights?
 
 ## Delivery waves
+
+> **"Demo, validate, then scale. Each wave earns the next."**
 
 Four waves take the design from a controlled MVP to governed scale, and each wave's demo is the gate to the next. The technical flows are proven first on synthetic data, real systems follow, and the governance layer comes last, once the flows work.
 
@@ -1275,6 +1314,8 @@ The design holds because it extends what the company already runs: Keycloak is t
 
 ## Market landscape
 
+> **"Standards first, vendors second."**
+
 Enterprises combine products from several layers; no single vendor covers all of them. Our stack maps one open-source or existing product to each layer.
 
 | Layer | Enterprise vendors | Our stack |
@@ -1289,6 +1330,8 @@ Enterprises combine products from several layers; no single vendor covers all of
 Vendors implement different subsets of emerging specifications (ID-JAG, AIMS, WIMSE), so no stack is yet sure to interoperate with the others ([Forkast](https://forkast.news/six-vendors-are-shipping-agent-identity-products-the-ietf-has-not-finished-the-standard/)). Sources: [Speakeasy vendor comparison](https://www.speakeasy.com/blog/best-ai-agent-identity-vendors), [Saviynt](https://saviynt.com/blog/identity-security-for-ai), [Futurum on SailPoint](https://futurumgroup.com/insights/sailpoint-bets-on-identity-to-govern-ai-agents-at-navigate-2026/), [Permit.io](https://www.permit.io/blog/announcing-permit-mcp-gateway), [agentgateway ID-JAG](https://aaif.io/blog/agentgateway-now-supports-id-jag-and-mcp-enterprise-managed-auth).
 
 ## Standards and recommended changes
+
+> **"Bet on open standards; keep every component replaceable."**
 
 The plan stays; five changes make it hold as the standards settle.
 
