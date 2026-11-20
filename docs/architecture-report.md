@@ -4,22 +4,22 @@ Nov 17, 2026
 
 ## Summary
 
-AI agents join the same identity model as people, with no new IdP and no new portal: one authoritative source (HR for people, EasyVista for agents), one identity engine (NetIQ IDM), one directory for groups and roles (eDirectory/LDAP), Keycloak as the only IdP and LiteLLM as the only path to models and tools. All technical configuration is code in GitLab, applied by GitLab CI pipelines. The design rests on six hypotheses that the pilot must prove on seven target systems; the section *Validating the hypotheses* defines the tests. Delivery runs in four waves; the Foundation MVP demo is due before 15 December 2026.
+AI agents join the same identity model as people, with no new IdP and no new portal: one authoritative source (HR for people, the CMDB for agents), one identity engine (IDM), one directory for groups and roles (LDAP directory), Keycloak as the only IdP and LiteLLM as the only path to models and tools. All technical configuration is code in GitLab, applied by GitLab CI pipelines. The design rests on six hypotheses that the pilot must prove on seven target systems; the section *Validating the hypotheses* defines the tests. Delivery runs in four waves, starting with a 3-week Foundation MVP.
 
 **Decisions**
 
 | # | Decision | Rationale |
 | --- | --- | --- |
-| 1 | Keycloak 26.8 as the only IdP and broker (LDAP + Google), one realm for people and agents | It is already the SSO of every application (the CRM, Salesforce, SAP, Veeva, Workday, …): extend it, don't add a second one |
-| 2 | EasyVista as the authoritative registry of agents (CI class “AI Agent”) | It is to agents what HR is to people; no new portal |
-| 3 | NetIQ Identity Manager as the single identity engine; eDirectory/LDAP as the single source of groups and roles | No second engine: Keycloak and LiteLLM read and map, they never assign |
+| 1 | Keycloak 26.8 as the only IdP and broker (LDAP + Google), one realm for people and agents | It is already the SSO of every application (CRM, Salesforce, SAP, QMS, HR platform, …): extend it, don't add a second one |
+| 2 | The CMDB as the authoritative registry of agents (CI class “AI Agent”) | It is to agents what HR is to people; no new portal |
+| 3 | The IDM as the single identity engine; the LDAP directory as the single source of groups and roles | No second engine: Keycloak and LiteLLM read and map, they never assign |
 | 4 | Self-hosted GitLab + GitLab CI to configure Keycloak, LiteLLM, Cerbos and targets | The merge request is the audit trail; secretless pipelines thanks to OIDC ID tokens |
 | 5 | LiteLLM Enterprise as the gateway for LLMs and MCP | RBAC on teams, models, MCP servers and tools; audit and spend |
 | 6 | Cerbos for ABAC rules (OPA as an equivalent alternative) | Policy as code, tests in CI, commercial support |
 | 7 | User → agent delegation with token exchange and the `act` claim (Keycloak 26.8, preview) in development | In production, until supported: trace `sub` + `azp` |
 | 8 | CIBA for risky actions | Human approval at runtime |
 
-**Superseded**: midPoint, replaced by the NetIQ IDM already in use; Databricks, replaced by the CRM as a use case.
+**Superseded**: midPoint, replaced by the IDM already in use; Databricks, replaced by the CRM as a use case.
 
 ## Alignment with the agent identity security model
 
@@ -52,7 +52,7 @@ The design follows the five-layer model for agent identity (registration, runtim
 
 | Layer | Question it answers | Our design | Coverage |
 | --- | --- | --- | --- |
-| Registration | Who owns the agent, for what purpose, until when? | EasyVista CI with sponsor, archetype, expiry; NetIQ IDM lifecycle; k-agents as business UI; nightly reconciliation | Covered |
+| Registration | Who owns the agent, for what purpose, until when? | The CMDB CI with sponsor, archetype, expiry; IDM lifecycle; a business portal as UI; nightly reconciliation | Covered |
 | Runtime identity | Is this really the agent? | One Keycloak client per agent; Kubernetes ServiceAccount token or private\_key\_jwt; no secrets in GitLab | Covered |
 | Delegated authority | On whose behalf, with what reduced rights? | Token exchange with `act`; role intersection; Cerbos ABAC; CIBA | Covered |
 | Task context | For which task, now? | `task_id` and purpose in the token; Cerbos denies high-risk calls without them | Added |
@@ -64,7 +64,7 @@ The design follows the five-layer model for agent identity (registration, runtim
 | --- | --- |
 | 0 · Foundation | Runtime identity, delegated authority, first evidence events |
 | 1–2 · Validation | Task context, bound approvals, adversarial tests on real targets |
-| 3 · Scale and governance | Registration at scale (IDM, EasyVista, k-agents), discovery of shadow agents, full evidence chain in the SIEM |
+| 3 · Scale and governance | Registration at scale (IDM, CMDB, business portal), discovery of shadow agents, full evidence chain in the SIEM |
 
 ### Key concepts from the reference model
 
@@ -78,7 +78,7 @@ Reference diagrams in the article: [identity model comparison](https://www.penli
 
 | Aspect | Service account | AI agent | Our design |
 | --- | --- | --- | --- |
-| Owner | Application or platform team | A named person plus a technical owner | Sponsor and owner team in the EasyVista CI; review when the sponsor leaves |
+| Owner | Application or platform team | A named person plus a technical owner | Sponsor and owner team in the CMDB CI; review when the sponsor leaves |
 | Behaviour | Fixed code path | Chooses tools based on context | Tools allow-listed per agent in LiteLLM; Cerbos per call |
 | Main risk | Over-broad static rights | Same, plus prompt injection, task drift, lost delegation | Role intersection, task context, adversarial tests A1–A7 |
 | Credential | Static secret or role | Runtime identity plus short task-bound token | ServiceAccount token or private\_key\_jwt; 5-minute delegated tokens |
@@ -111,7 +111,7 @@ The reference model sets six components that must be in place before an agent ca
 
 | # | Component | In our design | Where |
 | --- | --- | --- | --- |
-| 1 | Register every agent before production | EasyVista CI with sponsor, owner team, version, purpose, allowed tools, data classes, token and delegation policy, approvals, expiry; no Keycloak client without an active CI | EasyVista, NetIQ IDM, reconciliation |
+| 1 | Register every agent before production | The CMDB CI with sponsor, owner team, version, purpose, allowed tools, data classes, token and delegation policy, approvals, expiry; no Keycloak client without an active CI | CMDB, IDM, reconciliation |
 | 2 | The agent authenticates as itself | One Keycloak client per agent; Kubernetes ServiceAccount token or private\_key\_jwt; no human tokens, no shared secrets | Keycloak |
 | 3 | Every delegated action carries both identities | Token exchange keeps the user in `sub` and the agent in `act`; no impersonation | Keycloak, target apps |
 | 4 | Step-up for high-risk actions | Six action classes in Cerbos; CIBA approval bound to the call | Cerbos, Keycloak CIBA |
@@ -175,7 +175,7 @@ Six additions close the gaps; each has an owner component and a test.
 | 2 | Narrower at every hop | Design rule: each downstream token has an audience and scope that are a subset of the incoming one; sub-agents use token exchange again, never reuse the parent token | Keycloak, MCP servers |
 | 3 | Approvals bound to the action | CIBA `binding_message` and `authorization_details` carry action, resource, amount, destination and expiry; the approval is valid once, for that call only | Keycloak CIBA, Cerbos |
 | 4 | Action classes | Cerbos policies tag tools by class: data export, external communication, financial operation, access control, production change, code execution; each class sets step-up and evidence rules | Cerbos |
-| 5 | Agent version in the record | The EasyVista CI holds model, prompt version and tool list; a change to any of them triggers a new review | EasyVista, NetIQ IDM |
+| 5 | Agent version in the record | The CMDB CI holds model, prompt version and tool list; a change to any of them triggers a new review | CMDB, IDM |
 | 6 | Local MCP servers | Not allowed on sensitive data; elsewhere only through the gateway, with origin checks and authentication; patched SDKs | Policy, LiteLLM |
 
 > **"A kill switch is many switches."**
@@ -249,7 +249,7 @@ Parameters are stored as a hash, not in clear text, so evidence carries no perso
 - High-risk action class without a matching approval, or with an expired one.
 - Token audience different from the MCP server that received it.
 - Call with a `task_id` that is closed or revoked.
-- Agent version in the event different from the version in the EasyVista CI.
+- Agent version in the event different from the version in the CMDB CI.
 
 The two core detections, written against the evidence index (SQL-style; the same logic goes into the SIEM rule language):
 
@@ -328,7 +328,7 @@ After each fix, retest both the denied action and a legitimate delegated action,
 
 > **"One IdP, one engine, one gateway: every request through the same door."**
 
-Four separate responsibilities: authoritative sources say who exists, NetIQ IDM decides who has what, Keycloak authenticates, LiteLLM and Cerbos enforce the rules; target systems apply their own roles.
+Four separate responsibilities: authoritative sources say who exists, the IDM decides who has what, Keycloak authenticates, LiteLLM and Cerbos enforce the rules; target systems apply their own roles.
 
 &#91;embedded content: architecture · sources, IDM, Keycloak, gateway, targets\]
 
@@ -336,14 +336,14 @@ Dashed lines are configuration, keys and tokens; solid lines are request traffic
 
 | Component | Role | Note |
 | --- | --- | --- |
-| HR / EasyVista | Authoritative sources: people (HR), AI agents (CI “AI Agent” in EasyVista) | EasyVista is also the entry point for requests and approvals |
-| NetIQ Identity Manager | Single engine: creates identities, assigns groups and roles, revokes | Reads EasyVista through a REST or JDBC driver, as it reads HR |
-| eDirectory / LDAP (+ Google) | Single published source of users, non-human identities, groups | Keycloak reads it read-only |
+| HR / CMDB | Authoritative sources: people (HR), AI agents (CI “AI Agent” in the CMDB) | The CMDB is also the entry point for requests and approvals |
+| IDM | Single engine: creates identities, assigns groups and roles, revokes | Reads the CMDB through a REST or JDBC connector, as it reads HR |
+| LDAP directory (+ Google) | Single published source of users, non-human identities, groups | Keycloak reads it read-only |
 | GitLab + GitLab CI | Configuration as code; pipelines that apply Keycloak, LiteLLM, Cerbos, targets | Merge requests with approvals; no secrets thanks to ID tokens |
 | Keycloak 26.8 | Single IdP: SSO, tokens, agent clients, delegation, CIBA | Already the SSO of all seven target systems |
 | LiteLLM Enterprise + Cerbos | Gateway for models and MCP tools: RBAC (LiteLLM) and ABAC (Cerbos) | Cerbos as a sidecar, fail-closed |
 | MCP servers | Narrow tools towards each target system | Reachable only from the gateway |
-| Target systems | SAP S/4HANA, the CRM, Salesforce, SynerTrade, Veeva Vault, Workday, Legisway | Apply their own roles: PFCG roles, CRM roles, permission sets, Vault security profiles, Workday security groups |
+| Target systems | SAP S/4HANA, CRM, Salesforce, P2P platform, QMS, HR platform, CLM | Apply their own roles: PFCG roles, CRM roles, permission sets, QMS security profiles, HR security groups |
 | Model providers | Claude, SAP AI Core (Generative AI Hub) | Credentials only in the gateway |
 | SIEM | Log correlation by correlation ID | Keycloak, LiteLLM, Cerbos, targets |
 
@@ -351,20 +351,20 @@ Dashed lines are configuration, keys and tokens; solid lines are request traffic
 
 > **"Same process for people and agents. Only the source changes."**
 
-The agent process mirrors the established process for people: only the authoritative source changes (EasyVista instead of HR), plus one extra step, the GitLab CI pipeline that creates the Keycloak client and the gateway configuration.
+The agent process mirrors the established process for people: only the authoritative source changes (CMDB instead of HR), plus one extra step, the GitLab CI pipeline that creates the Keycloak client and the gateway configuration.
 
 &#91;embedded content: people and agents · same central components\]
 
-NetIQ IDM, eDirectory and Keycloak are shared by both paths; for agents only the source (EasyVista) and the GitLab CI step, highlighted, are different.
+The IDM, the LDAP directory and Keycloak are shared by both paths; for agents only the source (CMDB) and the GitLab CI step, highlighted, are different.
 
 | Aspect | People (established process) | AI agents (same model) |
 | --- | --- | --- |
-| Authoritative source | HR | EasyVista, CI “AI Agent” |
+| Authoritative source | HR | CMDB, CI “AI Agent” |
 | Who starts it | HR at hiring; the employee for additional access | The sponsor (business) or the team building the agent |
 | Who approves | Manager and application owner | AI governance, security, owners of the data and systems touched |
-| Engine | NetIQ IDM | NetIQ IDM |
-| Where the identity lives | User in eDirectory | Non-human identity in eDirectory, with sponsor and expiry |
-| Where permissions live | Groups in eDirectory, written by the IDM | Groups in eDirectory + client scopes, defined in Git |
+| Engine | IDM | IDM |
+| Where the identity lives | User in the LDAP directory | Non-human identity in the LDAP directory, with sponsor and expiry |
+| Where permissions live | Groups in the LDAP directory, written by the IDM | Groups in the LDAP directory + client scopes, defined in Git |
 | Representation in Keycloak | LDAP-federated user (or brokered from Google) | Confidential client `agent-*` with a service account |
 | Credential | Password + MFA | No secret: federated Kubernetes token or private key (`private_key_jwt`) |
 | How it gets a token | Authorization Code + PKCE (Flow 1) | Client Credentials (Flow 2) or delegation (Flow 3) |
@@ -378,7 +378,7 @@ Two differences really matter: an agent always has an expiry (people don't), and
 
 > **"No request, no agent. No merge, no access."**
 
-An agent starts from a request in EasyVista and becomes operational only after an approved merge request in GitLab: every step leaves a trace, and nobody creates clients or permissions by hand.
+An agent starts from a request in the CMDB and becomes operational only after an approved merge request in GitLab: every step leaves a trace, and nobody creates clients or permissions by hand.
 
 &#91;embedded content: creating an agent · 9 steps, 7 actors\]
 
@@ -386,15 +386,15 @@ An agent starts from a request in EasyVista and becomes operational only after a
 
 **The steps**
 
-1. **Request** — The sponsor opens the “New AI agent” request in EasyVista: purpose, archetype (agent type from the catalogue), target systems, data processed, mode (autonomous or on behalf of a user), expiry.
-2. **Approvals** — AI governance, security and data owners approve in the EasyVista workflow (or in NetIQ Identity Governance, if available). Read-only archetypes get a simplified approval.
-3. **CI active** — EasyVista sets the “AI Agent” CI to active.
-4. **Identity** — NetIQ IDM reads the CI (REST or JDBC driver), creates the non-human identity in eDirectory with sponsor and expiry, and assigns the groups the archetype provides.
+1. **Request** — The sponsor opens the “New AI agent” request in the CMDB: purpose, archetype (agent type from the catalogue), target systems, data processed, mode (autonomous or on behalf of a user), expiry.
+2. **Approvals** — AI governance, security and data owners approve in the CMDB workflow (or in the IDM's governance module, if available). Read-only archetypes get a simplified approval.
+3. **CI active** — The CMDB sets the “AI Agent” CI to active.
+4. **Identity** — The IDM reads the CI (REST or JDBC connector), creates the non-human identity in the LDAP directory with sponsor and expiry, and assigns the groups the archetype provides.
 5. **Merge request** — The IDM (through a GitLab bot) opens a merge request in the `identity-config` repository with the agent definition file.
 6. **Review and test** — CODEOWNERS (AI platform and security) approve; GitLab CI validates the schema, the policies and the change plan.
 7. **Apply** — On merge to `main` (protected branch) GitLab CI creates the Keycloak client and scopes, the team and MCP permissions in LiteLLM, and the attributes in Cerbos.
-8. **Roles on targets** — Where a technical identity is needed (SAP user, Salesforce integration user, Workday agent account), the pipeline opens a request to the system owner, who assigns the minimum role.
-9. **Verify and confirm** — The verify job obtains a test token and checks claims and permissions; the outcome goes back to the IDM and EasyVista, which tells the sponsor the agent is active.
+8. **Roles on targets** — Where a technical identity is needed (SAP user, Salesforce integration user, HR-platform agent account), the pipeline opens a request to the system owner, who assigns the minimum role.
+9. **Verify and confirm** — The verify job obtains a test token and checks claims and permissions; the outcome goes back to the IDM and the CMDB, which tells the sponsor the agent is active.
 
 **The agent definition file** (generated by the IDM, changed only through merge requests)
 
@@ -402,7 +402,7 @@ An agent starts from a request in EasyVista and becomes operational only after a
 # identity-config/agents/agt-0042.yaml
 id: agt-0042
 name: crm-assistant
-easyvista_ci: CI-AGT-0042
+cmdb_ci: CI-AGT-0042
 owners:
   business: maria.rossi@acme.it        # sponsor, accountable for purpose and risk
   technical: team-crm-digital           # runs and fixes the agent
@@ -459,7 +459,7 @@ lifecycle:
   expires: 2027-05-31
 ```
 
-Every block maps to one component: `keycloak` to the client and scopes, `litellm` to the team and tool allow and deny lists, `cerbos` to the attributes and step-up classes, `evidence` to the SIEM stream, `lifecycle` to the EasyVista CI and NetIQ recertification. A change to `model_context` triggers a new review.
+Every block maps to one component: `keycloak` to the client and scopes, `litellm` to the team and tool allow and deny lists, `cerbos` to the attributes and step-up classes, `evidence` to the SIEM stream, `lifecycle` to the CMDB CI and IDM recertification. A change to `model_context` triggers a new review.
 
 **The GitLab CI pipeline**
 
@@ -469,7 +469,7 @@ Every block maps to one component: `keycloak` to the client and scopes, `litellm
 | `plan` | `terraform plan` on Keycloak; diff of the LiteLLM configuration | Every merge request, result posted as an MR comment |
 | `apply` | `terraform apply` on Keycloak; API calls to LiteLLM; Cerbos bundle | Only on `main`, after approval |
 | `verify` | Test token; checks on `aud`, `scope`, roles; negative tests (scope not allowed, tool not permitted) | After `apply` |
-| `report` | Outcome and `client_id` back to NetIQ IDM and EasyVista | After `verify` |
+| `report` | Outcome and `client_id` back to the IDM and the CMDB | After `verify` |
 
 **No secrets in the pipeline**: jobs use GitLab CI OIDC ID tokens (`id_tokens` keyword, with a dedicated `aud`) to authenticate to Keycloak through federated client authentication, and to Vault for the few remaining credentials. To verify on 26.8: GitLab configured as a trusted issuer for the admin client.
 
@@ -479,24 +479,24 @@ Every block maps to one component: `keycloak` to the client and scopes, `litellm
 
 > **"Agents expire by default. Renewal is a decision."**
 
-Every change follows the same path as creation (EasyVista → NetIQ IDM → merge request → GitLab CI); the only exception is the emergency block, which acts at once and is regularised afterwards.
+Every change follows the same path as creation (CMDB → IDM → merge request → GitLab CI); the only exception is the emergency block, which acts at once and is regularised afterwards.
 
 | Event | Who starts it | What happens |
 | --- | --- | --- |
-| Permission change | Sponsor, in EasyVista | New approvals; the IDM updates the groups and opens the MR; GitLab CI applies |
+| Permission change | Sponsor, in the CMDB | New approvals; the IDM updates the groups and opens the MR; GitLab CI applies |
 | Renewal | Sponsor, before expiry | Recertification: the sponsor confirms purpose and permissions; new expiry in the CI |
 | Expiry not renewed | Automatic (IDM) | Suspension: client disabled in Keycloak, team blocked in LiteLLM; retirement after 30 days |
 | Sponsor leaves the company | Automatic (HR → IDM flow) | The agent passes to the sponsor's manager, who must confirm or retire it |
-| Emergency (compromised agent) | Security | Immediate block in LiteLLM and Keycloak via runbook; then the CI is suspended in EasyVista |
+| Emergency (compromised agent) | Security | Immediate block in LiteLLM and Keycloak via runbook; then the CI is suspended in the CMDB |
 | Retirement | Sponsor or expiry | Cascading removal: client, team, Cerbos attributes, technical identities on targets; the CI stays as history |
 
-**Nightly reconciliation** — A scheduled GitLab pipeline compares five lists: active CIs in EasyVista, non-human identities in eDirectory, files in `identity-config/agents`, `agent-*` clients in Keycloak, agents and teams in LiteLLM.
+**Nightly reconciliation** — A scheduled GitLab pipeline compares five lists: active CIs in the CMDB, non-human identities in the LDAP directory, files in `identity-config/agents`, `agent-*` clients in Keycloak, agents and teams in LiteLLM.
 
-- Keycloak `agent-*` client without an active CI: disabled at once and flagged with an EasyVista ticket.
+- Keycloak `agent-*` client without an active CI: disabled at once and flagged with a CMDB ticket.
 - Configuration that differs from Git (manual change): restored by the pipeline and flagged.
 - Active CI without a client: ticket to the AI platform team.
 
-It is the protection against “shadow” agents and it compensates for CMDB quality: EasyVista remains the source, but it doesn't have to be perfect for the system to be safe.
+It is the protection against “shadow” agents and it compensates for CMDB quality: the CMDB remains the source, but it doesn't have to be perfect for the system to be safe.
 
 ## Who uses an agent and how it authenticates
 
@@ -580,7 +580,7 @@ resource "keycloak_openid_client_optional_scopes" "agent_crm_assistant" {
 | AI channel | If the token has `act` or a `crm:ai-*` scope: extra rules (no export, writes only as drafts without `crm:ai-write`) |
 | Audit | Log `act.client_id` and the correlation ID next to the user |
 
-The same pattern applies wherever a target's API can trust a Keycloak token: Salesforce, already behind Keycloak, through its token exchange handler; SAP through SAP IAS trusting Keycloak; Veeva Vault possibly through its OAuth 2.0 / OpenID Connect profile. Where an API trusts only its own tokens (Workday, Legisway, probably SynerTrade), the MCP server bridges, and the validation section tests what that costs. A separate IdP for agents, or API keys per agent, would force every application to trust a new issuer and to duplicate roles.
+The same pattern applies wherever a target's API can trust a Keycloak token: Salesforce, already behind Keycloak, through its token exchange handler; SAP through SAP IAS trusting Keycloak; the QMS possibly through its OAuth 2.0 / OpenID Connect profile. Where an API trusts only its own tokens (HR platform, CLM, probably P2P platform), the MCP server bridges, and the validation section tests what that costs. A separate IdP for agents, or API keys per agent, would force every application to trust a new issuer and to duplicate roles.
 
 ## RBAC, ABAC and policy
 
@@ -592,19 +592,19 @@ RBAC decides in advance who can do what, based on the roles assigned by the IDM;
 
 **How the token, roles and attributes travel**
 
-&#91;embedded content: token, roles and attributes · from NetIQ IDM to the target\]
+&#91;embedded content: token, roles and attributes · from the IDM to the target\]
 
-Roles and attributes are assigned once, in NetIQ IDM, and reach every later layer inside the Keycloak token. LiteLLM verifies the token locally, Cerbos judges each single call, and the target applies its own roles, so a mistake in one layer is caught by the next.
+Roles and attributes are assigned once, in the IDM, and reach every later layer inside the Keycloak token. LiteLLM verifies the token locally, Cerbos judges each single call, and the target applies its own roles, so a mistake in one layer is caught by the next.
 
 **RBAC and ABAC: what each decides**
 
 |  | RBAC | ABAC |
 | --- | --- | --- |
 | Question | Can this identity use this system and this tool? | Is this call, with these arguments, in this context, allowed? |
-| Where it is assigned | NetIQ IDM → eDirectory groups → Keycloak roles; target roles | Cerbos policies in GitLab |
+| Where it is assigned | IDM → LDAP directory groups → Keycloak roles; target roles | Cerbos policies in GitLab |
 | Where it is enforced | Keycloak (roles and scopes in the token), LiteLLM (teams, models, MCP servers and tools), target | LiteLLM guardrail → Cerbos, before every tool call |
 | Attributes used | Role, group, team | Archetype, BU, delegating user (`sub`), agent (`act`), arguments, amounts, number of records, data class, approval present |
-| Changes with | Hires, new agents, requests in EasyVista | New business or compliance rules |
+| Changes with | Hires, new agents, requests in the CMDB | New business or compliance rules |
 
 **What lives where in GitLab**
 
@@ -784,7 +784,7 @@ Every action can be traced from request to data through a correlation ID generat
 
 | System | What it records | Person / agent distinction |
 | --- | --- | --- |
-| EasyVista | Request, approvals, CI status | Who authorised the agent |
+| CMDB | Request, approvals, CI status | Who authorised the agent |
 | GitLab | Merge requests, approvers, pipelines | Who changed the configuration and when |
 | Keycloak | Logins, token issuance, token exchange, consents, CIBA | Native: `azp` and `act` in every token event |
 | LiteLLM | Every call: user, agent, team, model, tool, cost | Native |
@@ -792,9 +792,9 @@ Every action can be traced from request to data through a correlation ID generat
 | The CRM | Application log | Native, by logging `act.client_id` |
 | Salesforce | Login history, API events, `AI_Agent__c` field | Native, through one external client app per agent |
 | SAP S/4HANA | Security Audit Log, change documents | Only via correlation or an “AI” alias user |
-| SynerTrade, Veeva Vault, Workday, Legisway | See *Validating the hypotheses* | To be proven per system (hypothesis H5) |
+| P2P platform, QMS, HR platform, CLM | See *Validating the hypotheses* | To be proven per system (hypothesis H5) |
 
-All logs flow into the SIEM (e.g. Google SecOps). Sensitive fields in decision logs and prompt contents are excluded or masked by default; what to retain is decided with the DPO and compliance (GDPR, GxP).
+All logs flow into the SIEM. Sensitive fields in decision logs and prompt contents are excluded or masked by default; what to retain is decided with the DPO and compliance (GDPR, GxP).
 
 ## Validating the hypotheses
 
@@ -810,7 +810,7 @@ The design holds only if six hypotheses survive tests on seven target systems, e
 | H2 | **Delegated = person ∩ agent.** A delegated agent never does more than the person, nor more than its archetype | Both negative tests are refused: an action the person may do but the agent may not, and one the agent may do but the person may not | Delegated mode is not offered on that target |
 | H3 | **Autonomous = least privilege.** The autonomous agent's identity on the target holds only the minimum role | The forbidden action is refused by the target itself | The target owner narrows the role before go-live |
 | H4 | **Two independent layers stop every write.** Each write restriction is enforced at the gateway (levels 1–5) and at the target (level 7) | The same forbidden call is refused with the gateway checks on, and again when sent straight from the MCP server in the test environment | Write tools stay disabled on that target |
-| H5 | **Audit tells person from agent.** From a record on the target, an auditor finds the person, the agent and the EasyVista approval | The correlation ID links target log, LiteLLM, Cerbos and Keycloak for every test | Correlation plus marking, as for SAP, or an alias user |
+| H5 | **Audit tells person from agent.** From a record on the target, an auditor finds the person, the agent and the CMDB approval | The correlation ID links target log, LiteLLM, Cerbos and Keycloak for every test | Correlation plus marking, as for SAP, or an alias user |
 | H6 | **Revocation reaches every target.** Blocking the agent stops all its calls within the token lifetime | After the kill switch no call succeeds after 5 minutes, and the pipeline disables the technical identities on the targets | Revocation runbook per target; the agent is not promoted |
 
 ### How each target accepts an agent
@@ -822,16 +822,16 @@ Keycloak is the SSO of all seven systems for people, but SSO in the browser does
 | SAP S/4HANA | Principal propagation via SAP IAS trusting Keycloak, and Cloud Connector; technical communication user for autonomous agents | The person (MROSSI) / `AI_PO_MON` | IAS trust towards Keycloak and propagation rules; native audit only with an alias user | Not started |
 | The CRM | Keycloak JWT accepted natively (`aud` `crm`, roles in `resource_access`) | The person + `act.client_id` / role `ai-dq-bot` | The APIs accept a bearer token, not only the web session | Not started |
 | Salesforce | OAuth 2.0 token exchange, with an Apex handler validating the Keycloak token | The person, through the agent's external client app / integration user | Edition and licences for token exchange and Event Monitoring | Not started |
-| SynerTrade (P2P) | Not confirmed: public sources disagree on whether a usable API exists. Hypothesis: vendor API with a technical account held by the MCP server | A technical account in both modes: SynerTrade doesn't see the person | Whether an API exists and can act as a named user; if not, no delegated writes | Not started |
-| Veeva Vault | Vault's OAuth 2.0 / OpenID Connect profile exchanges an IdP access token for a Vault session; the API applies the same access controls as the UI | The person, with their security profile and sharing / dedicated integration user | Vault documents PingFederate, ADFS and Okta as authorization servers (Entra ID in later versions), not Keycloak: test the profile with Keycloak in a sandbox | Not started |
-| Workday | Workday issues its own tokens. Its Agent System of Record (ASOR) registers external agents in two modes: delegate (OAuth on the user's behalf) and ambient (x509 key, with an Agent System User and an Agent Security Group). At runtime Workday checks both the user's access to the agent and to the APIs it calls | The person: Workday applies the worker's own permissions, and only through the agent's skills / the agent's own Agent System User | ASOR enabled on the tenant; a second agent registry to reconcile with EasyVista | Not started |
-| Legisway | REST APIs (Search, Content, File Transfer) with a JWT from Legisway's own Authentication API; API access depends on the package | API user per agent / delegated: unknown | Whether API calls run with a named user's rights; if not, delegated mode only for reads filtered by the MCP server | Not started |
+| P2P platform | To confirm whether a usable API exists. Hypothesis: vendor API with a technical account held by the MCP server | A technical account in both modes: the P2P platform doesn't see the person | Whether an API exists and can act as a named user; if not, no delegated writes | Not started |
+| QMS (quality document management) | The vendor's OAuth 2.0 / OpenID Connect profile exchanges an IdP access token for a session; the API applies the same access controls as the UI | The person, with their security profile and sharing / dedicated integration user | Keycloak is not among the documented authorization servers: test the profile with Keycloak in a sandbox | Not started |
+| HR platform (SaaS) | The platform issues its own tokens. Its own agent registry registers external agents in two modes: delegate (OAuth on the user's behalf) and ambient (key-based, with a dedicated agent user and security group). At runtime it checks both the user's access to the agent and to the APIs it calls | The person: the platform applies the worker's own permissions, and only through the agent's skills / the agent's own system user | Agent registry enabled on the tenant; a second agent registry to reconcile with the CMDB | Not started |
+| CLM (contract management) | REST APIs with a JWT from the vendor's own authentication API; API access depends on the licence package | API user per agent / delegated: unknown | Whether API calls run with a named user's rights; if not, delegated mode only for reads filtered by the MCP server | Not started |
 
 **Audit hooks for H5**
 
-- Veeva Vault: the API records a client ID per call (`X-VaultAPI-ClientID`, one per agent) and a reference ID (`X-VaultAPI-ReferenceID`, the correlation ID) in its API usage log. Veeva says that log is not designed for auditing, so the evidence stays the Vault audit trail plus the SIEM join.
-- Workday: the audit log distinguishes an ambient agent acting alone from a delegate agent acting for a specific user (View AI Agent User Audit Trail report).
-- SynerTrade and Legisway: no documented hook; the MCP server writes the correlation ID into a reference or note field where one exists, otherwise correlation only.
+- QMS: the API records a client ID per call (one per agent) and a reference ID (the correlation ID) in its API usage log. That log is not designed for auditing, so the evidence stays the QMS audit trail plus the SIEM join.
+- HR platform: the audit log distinguishes an ambient agent acting alone from a delegate agent acting for a specific user.
+- P2P platform and CLM: no documented hook; the MCP server writes the correlation ID into a reference or note field where one exists, otherwise correlation only.
 
 ### Test matrix: one restriction per system and mode
 
@@ -845,21 +845,21 @@ Each row names something the agent must not do, even where the person could. L1�
 | 4 | The CRM | Autonomous | Incomplete visit reports | No note text or physician personal data; reminders only to the report owner | L4, L6, L7 (`ai-dq-bot`) | Read a full note → refused by the role; reminder to another rep → Cerbos deny |
 | 5 | Salesforce | Delegated: sales rep | Update an opportunity's next step | No change to amount, or stage beyond Negotiation, without approval; only records shared with Giulia | L4, L5, L7 sharing | Change the amount → CIBA; update an opportunity not shared with Giulia → refused by Salesforce |
 | 6 | Salesforce | Autonomous | Lead enrichment | Only `Industry` and `NumberOfEmployees`, on leads in status New | L3, L4, L7 field-level security | Change `OwnerId` → guardrail deny; same call straight to Salesforce → refused by field-level security |
-| 7 | SynerTrade | Delegated: requester | Create a catalogue purchase requisition | Create only, never approve or release; catalogue items only; only the person's cost centre | L2, L4, L6 | Approve own requisition → tool absent; other cost centre → Cerbos deny; check whether SynerTrade also refuses it (if not, H4 fails: no delegated writes) |
-| 8 | SynerTrade | Autonomous | Report invoices blocked on price or quantity mismatch | Read only; no change to supplier master data, bank details above all | L2, L7 read-only account | Update a supplier's bank account → tool absent; same call straight to SynerTrade → refused for the technical account |
-| 9 | Veeva Vault | Delegated: reviewer | Summarise a document and draft review comments | Only documents the person can see; never change lifecycle state (approve, release) | L2, L7 sharing and lifecycle roles | Move a document to Approved → tool absent; document outside the person's sharing → refused by Vault |
-| 10 | Veeva Vault | Autonomous | Metadata quality check on selected document types | Metadata of named document types only; no file download; no edits | L3, L6, L7 security profile | Download a source file → tool absent; same call straight to Vault → refused by the security profile |
-| 11 | Workday | Delegated: employee | Check leave balance and request time off | Only for the person themselves; no compensation data | L4 (worker = `sub`), L7 worker's rights, only through the agent's skills | Leave balance of a colleague → refused by Workday (the worker's own permissions); salary → no tool in the agent's skills exposes compensation |
-| 12 | Workday | Autonomous (ambient) | Flag new hires starting next week with missing data | View only, hiring data of one supervisory organisation; no compensation, national ID or address | L6, L7 Agent Security Group domains | Compensation of a new hire → refused by Workday; another organisation → refused |
-| 13 | Legisway | Delegated: legal counsel | Contracts expiring within 90 days in the person's legal entity; draft renewal notice | Only contracts the person may see; no file upload or delete; no status change | L2, L4 (entity = person's), L7 to verify | Confidential contract of another entity → refused; record whether Legisway or only Cerbos refuses it (decides H4) |
-| 14 | Legisway | Autonomous | Expiry and obligation alerts | Contract metadata only (title, dates, counterparty, entity); no files; no litigation module | L2, L3 (content type = contract), L6, L7 API user | Search on litigation records → guardrail deny; file download → tool absent, and refused for the API user |
+| 7 | P2P platform | Delegated: requester | Create a catalogue purchase requisition | Create only, never approve or release; catalogue items only; only the person's cost centre | L2, L4, L6 | Approve own requisition → tool absent; other cost centre → Cerbos deny; check whether the P2P platform also refuses it (if not, H4 fails: no delegated writes) |
+| 8 | P2P platform | Autonomous | Report invoices blocked on price or quantity mismatch | Read only; no change to supplier master data, bank details above all | L2, L7 read-only account | Update a supplier's bank account → tool absent; same call straight to the P2P platform → refused for the technical account |
+| 9 | QMS | Delegated: reviewer | Summarise a document and draft review comments | Only documents the person can see; never change lifecycle state (approve, release) | L2, L7 sharing and lifecycle roles | Move a document to Approved → tool absent; document outside the person's sharing → refused by the QMS |
+| 10 | QMS | Autonomous | Metadata quality check on selected document types | Metadata of named document types only; no file download; no edits | L3, L6, L7 security profile | Download a source file → tool absent; same call straight to the QMS → refused by the security profile |
+| 11 | HR platform | Delegated: employee | Check leave balance and request time off | Only for the person themselves; no compensation data | L4 (worker = `sub`), L7 worker's rights, only through the agent's skills | Leave balance of a colleague → refused by the HR platform (the worker's own permissions); salary → no tool in the agent's skills exposes compensation |
+| 12 | HR platform | Autonomous (ambient) | Flag new hires starting next week with missing data | View only, hiring data of one supervisory organisation; no compensation, national ID or address | L6, L7 agent security group | Compensation of a new hire → refused by the HR platform; another organisation → refused |
+| 13 | CLM | Delegated: legal counsel | Contracts expiring within 90 days in the person's legal entity; draft renewal notice | Only contracts the person may see; no file upload or delete; no status change | L2, L4 (entity = person's), L7 to verify | Confidential contract of another entity → refused; record whether CLM or only Cerbos refuses it (decides H4) |
+| 14 | CLM | Autonomous | Expiry and obligation alerts | Contract metadata only (title, dates, counterparty, entity); no files; no litigation module | L2, L3 (content type = contract), L6, L7 API user | Search on litigation records → guardrail deny; file download → tool absent, and refused for the API user |
 
 ### How the tests run
 
-1. A dedicated GitLab CI pipeline, `ai-gateway/validation`, runs the matrix against test environments: SAP QAS, Salesforce sandbox, Vault sandbox, Workday sandbox tenant, and the CRM, SynerTrade and Legisway test instances.
-2. Test identities only: test persons in a test LDAP organisational unit with the roles each row needs, and test agents registered through the normal EasyVista → GitLab path, so agent creation is tested too.
+1. A dedicated GitLab CI pipeline, `ai-gateway/validation`, runs the matrix against test environments: SAP QAS, Salesforce sandbox, QMS sandbox, HR-platform sandbox tenant, and the CRM, P2P and CLM test instances.
+2. Test identities only: test persons in a test LDAP organisational unit with the roles each row needs, and test agents registered through the normal CMDB → GitLab path, so agent creation is tested too.
 3. Each negative test runs twice: through the gateway (expected: gateway denial) and straight from the MCP server to the target with gateway checks off (expected: target denial). Two denials prove H4.
-4. Evidence per test: request, LiteLLM and Cerbos decisions, target response, target audit entry, correlation ID. It is kept as pipeline artefacts and attached to the EasyVista change record, usable as GxP evidence.
+4. Evidence per test: request, LiteLLM and Cerbos decisions, target response, target audit entry, correlation ID. It is kept as pipeline artefacts and attached to the CMDB change record, usable as GxP evidence.
 5. Last, the kill switch (H6): block one agent per target and confirm no call succeeds after 5 minutes.
 
 Pass rule: a target gets write tools only when H1–H5 pass for it. A target that fails H1 stays out of scope or autonomous-only; one that fails H4 stays read-only.
@@ -872,27 +872,27 @@ Pass rule: a target gets write tools only when H1–H5 pass for it. A target tha
 | --- | --- |
 | Delegation with `act` in preview (Keycloak 26.8) | Development only; in production trace `sub` + `azp` until it is supported |
 | SAP doesn't tell the agent apart natively | Correlation and marking; alias user if required |
-| Targets whose API doesn't trust Keycloak (Workday, Legisway, probably SynerTrade, possibly Veeva Vault) | The MCP server bridges with the target's own credentials; delegated writes only where H2 and H4 pass |
-| EasyVista CMDB quality | Few mandatory fields, validation, nightly reconciliation |
+| Targets whose API doesn't trust Keycloak (HR platform, CLM, probably the P2P platform, possibly the QMS) | The MCP server bridges with the target's own credentials; delegated writes only where H2 and H4 pass |
+| CMDB quality | Few mandatory fields, validation, nightly reconciliation |
 | Revocation not immediate with local token verification | 5-minute agent tokens, block at the gateway |
 | Gateway supply chain (LiteLLM PyPI versions compromised in March 2026) | Images pinned by digest, internal mirror, scanning |
 | Pipeline with admin privileges | GitLab ID tokens with a dedicated `aud`, protected branches, mandatory approvals |
-| Licences | LiteLLM Enterprise for JWT auth and audit; SAP for any alias users; Salesforce Event Monitoring; Workday ASOR; Legisway API package |
+| Licences | LiteLLM Enterprise for JWT auth and audit; SAP for any alias users; Salesforce Event Monitoring; HR-platform agent registry; CLM API package |
 
 **Open points**
 
-- [ ] NetIQ: Identity Manager only, or Identity Governance too? (decides where approvals live)
-- [ ] NetIQ driver for EasyVista: REST or JDBC
+- [ ] IDM: provisioning only, or its governance module too? (decides where approvals live)
+- [ ] IDM connector for the CMDB: REST or JDBC
 - [ ] CRM APIs with bearer token and logging of `act`
 - [ ] SAP IAS trust towards Keycloak and principal propagation rules
 - [ ] Salesforce token exchange handler: edition and licences
 - [ ] Keycloak federated client authentication with GitLab CI ID tokens
 - [ ] CIBA thresholds, approvers and waiting times per process
 - [ ] Retention of prompts and responses (GDPR, GxP)
-- [ ] SynerTrade: does a usable API exist, and can it act as a named user?
-- [ ] Veeva: which Vaults are in scope (PromoMats, QualityDocs, RIM, …), and does an OAuth 2.0 / OpenID Connect profile accept Keycloak?
-- [ ] Workday: is Agent System of Record enabled on the tenant, and who reconciles it with EasyVista?
-- [ ] Legisway: is the API package licensed, and do API calls carry a named user's rights?
+- [ ] P2P platform: does a usable API exist, and can it act as a named user?
+- [ ] QMS: which modules are in scope, and does its OAuth 2.0 / OpenID Connect profile accept Keycloak?
+- [ ] HR platform: is its agent registry enabled on the tenant, and who reconciles it with the CMDB?
+- [ ] CLM: is the API package licensed, and do API calls carry a named user's rights?
 
 ## Delivery waves
 
@@ -904,14 +904,14 @@ Four waves take the design from a controlled MVP to governed scale, and each wav
 
 | Wave | Goal | Scope | Team | Demo |
 | --- | --- | --- | --- | --- |
-| 0 · Foundation (MVP) | A controlled, meaningful demo of the technical flows only | Keycloak, LiteLLM as AI and MCP gateway, one MCP server, one custom target app ending in a user UI; synthetic data | Core team (4) | Before 15 Dec 2026, after one 3-week sprint |
-| 1 · Validation | First real integrations; hypotheses H1–H5 on real systems | SAP S/4HANA, the CRM | Core team + 2 | 20 Jan 2027 |
-| 2 · Validation 2 | Same approach on more applications | Salesforce, SynerTrade, Veeva Vault, Workday, Legisway | To confirm | 20 Feb 2027 |
-| 3 · Scale and control | Governance layer and scale | NetIQ IDM, EasyVista CMDB, GitLab CI pipelines, reconciliation, revocation (H6), HA and DR | To define | To define |
+| 0 · Foundation (MVP) | A controlled, meaningful demo of the technical flows only | Keycloak, LiteLLM as AI and MCP gateway, one MCP server, one custom target app ending in a user UI; synthetic data | Core team (4) | After one 3-week sprint |
+| 1 · Validation | First real integrations; hypotheses H1–H5 on real systems | SAP S/4HANA, the CRM | Core team + 2 | About 5 weeks after Wave 0 |
+| 2 · Validation 2 | Same approach on more applications | Salesforce, P2P platform, QMS, HR platform, CLM | To confirm | About 4 weeks after Wave 1 |
+| 3 · Scale and control | Governance layer and scale | IDM, CMDB, GitLab CI pipelines, reconciliation, revocation (H6), HA and DR | To define | To define |
 
-Configuration is code from Wave 0 (Keycloak in Terraform, LiteLLM config in Git), applied by the team by hand. Wave 3 generates the same files through EasyVista → NetIQ IDM → GitLab CI, so nothing built earlier is thrown away.
+Configuration is code from Wave 0 (Keycloak in Terraform, LiteLLM config in Git), applied by the team by hand. Wave 3 generates the same files through CMDB → IDM → GitLab CI, so nothing built earlier is thrown away.
 
-### Wave 0 — Foundation MVP (before 15 Dec 2026)
+### Wave 0 — Foundation MVP (3 weeks)
 
 **Core team**: 4 people. **Cadence**: one 3-week sprint, closed by the demo release.
 
@@ -921,11 +921,11 @@ The MVP proves, on synthetic data, that a person and two agents reach one custom
 
 | Area | In Wave 0 | Later |
 | --- | --- | --- |
-| Identity | Keycloak 26.8 in dev, one realm `ai-demo`, synthetic test users | LDAP federation, NetIQ IDM (Wave 3) |
+| Identity | Keycloak 26.8 in dev, one realm `ai-demo`, synthetic test users | LDAP federation, the IDM (Wave 3) |
 | Gateway | LiteLLM proxy (Enterprise trial, needed for JWT auth): model, MCP gateway, one team per agent, tool permissions, argument guardrail | Cerbos ABAC, CIBA approvals (Wave 1) |
 | Target | `demo-crm`, a custom app with API and web UI, seeded with synthetic accounts and visits | SAP and CRM (Wave 1); five more apps (Wave 2) |
-| Agents | Delegated `crm-assistant` (token exchange with `act`) and autonomous `agent-dq` (client credentials) | Agent registry in EasyVista (Wave 3) |
-| Configuration | Terraform and YAML in a GitLab repository, applied by the team | GitLab CI pipelines driven by NetIQ IDM (Wave 3) |
+| Agents | Delegated `crm-assistant` (token exchange with `act`) and autonomous `agent-dq` (client credentials) | Agent registry in the CMDB (Wave 3) |
+| Configuration | Terraform and YAML in a GitLab repository, applied by the team | GitLab CI pipelines driven by the IDM (Wave 3) |
 | Operations | One Docker Compose stack; logs in LiteLLM and in the app | HA, DR, SIEM (Wave 3) |
 
 `demo-crm` is built like the CRM on purpose: client roles in the Keycloak JWT and the same scope pattern, so Wave 1 moves to the CRM by changing configuration, not code.
@@ -1247,14 +1247,14 @@ accounts = [{
 
 ### Wave 0 — sprint plan and done criteria
 
-The sprint runs from Monday 23 November to Friday 11 December, with the demo release on Monday 14 December. Tuesday 8 December is a public holiday, so week 3 has four working days.
+The sprint runs three weeks, with the demo release on the first working day after it.
 
-| Week | Dates | Deliverables | Done when |
-| --- | --- | --- | --- |
-| 1 | 23–27 Nov | Compose stack; Keycloak realm as code; LiteLLM with JWT auth and one model; demo-crm API with token check and seeded data | A test user's token is accepted by LiteLLM and demo-crm; a token with the wrong `aud` is refused |
-| 2 | 30 Nov–4 Dec | MCP server with six tools; UI with badges; `agent-dq`; `crm-assistant` with token exchange | Acts 1, 2 and 4 run end to end |
-| 3 | 7–11 Dec (8 Dec holiday) | Tool permissions and guardrail; direct-call test; kill switch; scripted negative tests; demo script and rehearsal | All seven acts pass from a clean `docker compose up` |
-| Release | Mon 14 Dec | Demo to stakeholders; recording and evidence kept | Demo held before 15 Dec |
+| Week | Deliverables | Done when |
+| --- | --- | --- |
+| 1 | Compose stack; Keycloak realm as code; LiteLLM with JWT auth and one model; demo-crm API with token check and seeded data | A test user's token is accepted by LiteLLM and demo-crm; a token with the wrong `aud` is refused |
+| 2 | MCP server with six tools; UI with badges; `agent-dq`; `crm-assistant` with token exchange | Acts 1, 2 and 4 run end to end |
+| 3 | Tool permissions and guardrail; direct-call test; kill switch; scripted negative tests; demo script and rehearsal | All seven acts pass from a clean `docker compose up` |
+| Release | Demo to stakeholders; recording and evidence kept | Demo held at the end of the sprint |
 
 **Definition of done**
 
@@ -1274,7 +1274,7 @@ The sprint runs from Monday 23 November to Friday 11 December, with the demo rel
 | JWT auth and audit are Enterprise features | Trial licence requested this week | None: required for the demo |
 | Model access from the demo environment | Network route and API key approved | The model through SAP AI Core, if already reachable |
 
-### Wave 1 — Validation: SAP and CRM (demo 20 Jan 2027)
+### Wave 1 — Validation: SAP and CRM
 
 **Team**: core team + 2.
 
@@ -1287,28 +1287,28 @@ Wave 1 swaps the demo app for two real systems and keeps the same flows: use cas
 | Policy | Cerbos behind the LiteLLM guardrail; CIBA for orders above €5,000 | The €12,000 order waits for approval |
 | Validation | `ai-gateway/validation` pipeline in GitLab CI runs rows 1–4, each through the gateway and directly | H1–H5 status set for SAP and CRM |
 
-**Request during Wave 0**: these have lead times and the Christmas break (24 Dec–6 Jan) leaves about three and a half working weeks before the demo.
+**Request during Wave 0**: these have lead times, and Wave 1 has only a few working weeks before its demo.
 
 - [ ] SAP IAS trust towards Keycloak, and Cloud Connector for QAS
 - [ ] SAP QAS technical user and display role (`Z_AI_PO_DISPLAY`)
 - [ ] CRM test environment whose API accepts bearer tokens
 - [ ] Test users with CRM and SAP roles in the corporate test realm
 
-### Wave 2 — Validation 2: five more applications (demo 20 Feb 2027)
+### Wave 2 — Validation 2: five more applications
 
 **Team**: to confirm (assumed: the Wave 1 team).
 
-Same approach, extended to Salesforce, SynerTrade, Veeva Vault, Workday and Legisway: rows 5–14 of the test matrix. The riskiest hypotheses are tested in the first week, so an application that fails H1 leaves the wave early instead of at the demo.
+Same approach, extended to Salesforce, the P2P platform, the QMS, the HR platform and the CLM: rows 5–14 of the test matrix. The riskiest hypotheses are tested in the first week, so an application that fails H1 leaves the wave early instead of at the demo.
 
 | Week 1 check | Application | If it fails |
 | --- | --- | --- |
-| The OAuth 2.0 / OpenID Connect profile accepts Keycloak tokens | Veeva Vault | Autonomous only, with an integration user |
-| A usable API exists and can act as a named user | SynerTrade | Out of the wave, or read-only through SAP data |
-| API calls carry a named user's rights | Legisway | Delegated mode only for reads filtered by the MCP server |
-| Agent System of Record is enabled on the tenant | Workday | Integration system user, autonomous only |
+| The OAuth 2.0 / OpenID Connect profile accepts Keycloak tokens | QMS | Autonomous only, with an integration user |
+| A usable API exists and can act as a named user | P2P platform | Out of the wave, or read-only through SAP data |
+| API calls carry a named user's rights | CLM | Delegated mode only for reads filtered by the MCP server |
+| The agent registry is enabled on the tenant | HR platform | Integration system user, autonomous only |
 | Token exchange handler available in the edition | Salesforce | Integration user per agent |
 
-Prerequisites: Salesforce sandbox with Event Monitoring, Veeva Vault sandbox, Workday sandbox tenant with ASOR, Legisway API package, SynerTrade test instance. 20 Feb 2027 is a Saturday: confirm Friday 19 or Monday 22 February.
+Prerequisites: Salesforce sandbox with Event Monitoring, QMS sandbox, HR-platform sandbox tenant with the agent registry, CLM API package, P2P test instance.
 
 ### Wave 3 — Scale and control: the governance layer
 
@@ -1316,8 +1316,8 @@ Prerequisites: Salesforce sandbox with Event Monitoring, Veeva Vault sandbox, Wo
 
 Wave 3 replaces the hand-applied configuration of Waves 0–2 with the governed path described in *How an agent is born*, and makes the platform ready for production.
 
-- EasyVista: CI class “AI Agent”, request and approval workflow.
-- NetIQ IDM: driver for EasyVista, non-human identities and groups in eDirectory; LDAP federation in Keycloak.
+- CMDB: CI class “AI Agent”, request and approval workflow.
+- IDM: connector for the CMDB, non-human identities and groups in the LDAP directory; LDAP federation in Keycloak.
 - GitLab CI: `validate`, `plan`, `apply`, `verify`, `report` on `identity-config` and `ai-gateway`; the files written by hand in Waves 0–2 become generated ones.
 - Nightly reconciliation of the five lists; renewals and retirement.
 - Revocation end to end (H6) on every target; emergency runbook.
@@ -1328,27 +1328,27 @@ Wave 3 replaces the hand-applied configuration of Waves 0–2 with the governed 
 
 > **"Build on what we already run; replace only what we can't trust."**
 
-The design holds because it extends what the company already runs: Keycloak is the SSO of all seven targets, NetIQ IDM is the single engine, Cerbos does fine-grained authorization. The weak points are LiteLLM as a single trust point, a slow revocation path, and three blind spots.
+The design holds because it extends what the company already runs: Keycloak is the SSO of all seven targets, the IDM is the single engine, Cerbos does fine-grained authorization. The weak points are LiteLLM as a single trust point, a slow revocation path, and three blind spots.
 
 **What holds**
 
 - **Keycloak follows the standards.** 26.7 added an AuthZEN endpoint, MCP server authorization, token exchange delegation (experimental) and the receiving side of ID-JAG (experimental). The issuing side of ID-JAG is not built yet. ([release notes](https://www.keycloak.org/2026/07/keycloak-2670-released))
 - **Cerbos is a safe bet.** AuthZEN Authorization API 1.0 became an OpenID Final Specification in January 2026, and Cerbos co-chairs the working group. If the gateway calls Cerbos only through AuthZEN, both gateway and policy engine stay replaceable. ([OpenID](https://openid.net/authorization-api-1-0-final-specification-approved/))
-- **Registry plus IDM matches the market.** ServiceNow AI Passport grounds agent identity in CMDB business context, the same idea as EasyVista as agent registry. SailPoint extends ownership, lifecycle and certification to agents rather than adding a new product.
+- **Registry plus IDM matches the market.** ServiceNow AI Passport grounds agent identity in CMDB business context, the same idea as our CMDB as agent registry. SailPoint extends ownership, lifecycle and certification to agents rather than adding a new product.
 
 **Weak points**
 
 | # | Weakness | Why it matters | Fix |
 | --- | --- | --- | --- |
 | 1 | LiteLLM is the single trust point | Malicious PyPI releases 1.82.7 and 1.82.8 in March 2026 stole credentials from CI pipelines ([LiteLLM](https://docs.litellm.ai/blog/security-update-march-2026)); a second compromise (v1.107.0) was reported on 21 Oct 2026, to confirm. The gateway holds every model and MCP credential. | Images pinned by digest from a private mirror, secrets in a vault, egress allow-list, no authorization logic in LiteLLM so it can be swapped |
-| 2 | Revocation path too slow | EasyVista → NetIQ → LDAP → GitLab CI → Keycloak/LiteLLM suits normal changes, not a misbehaving agent | Direct kill switch: disable the Keycloak client and revoke the LiteLLM key in one action; short token lifetimes |
+| 2 | Revocation path too slow | CMDB → IDM → LDAP → GitLab CI → Keycloak/LiteLLM suits normal changes, not a misbehaving agent | Direct kill switch: disable the Keycloak client and revoke the LiteLLM key in one action; short token lifetimes |
 | 3 | Token passthrough | The MCP authorization spec (2026-07-28) requires audience-bound tokens and forbids passthrough | Drop LiteLLM passthrough modes; token exchange per MCP server audience |
-| 4 | NetIQ agent features unproven | OpenText claims NHI and AI agent governance, but no agent-specific feature (sponsor, recertification, templates) is documented; LDAP is a poor home for owner, purpose, risk tier, allowed tools | Keep agent metadata in EasyVista and carry it into token claims; verify NetIQ on our version |
+| 4 | IDM agent features unproven | Legacy IDM vendors claim NHI and AI agent governance, but agent-specific features (sponsor, recertification, templates) are rarely documented; LDAP is a poor home for owner, purpose, risk tier, allowed tools | Keep agent metadata in the CMDB and carry it into token claims; verify the IDM on our version |
 
 **Blind spots**
 
 - **Shadow agents**: nothing discovers Claude Desktop, Copilot Studio or local MCP servers.
-- **SaaS-native agents**: Agentforce, SAP Joule and Workday agents call their own platforms directly, so the gateway never sees them.
+- **SaaS-native agents**: Agentforce, SAP Joule and HR-platform agents call their own platforms directly, so the gateway never sees them.
 - **Agent credentials**: agents still use client secrets; private\_key\_jwt or workload identity (GitLab ID tokens, Kubernetes service-account tokens, SPIFFE) removes them.
 
 ## Market landscape
@@ -1360,7 +1360,7 @@ Enterprises combine products from several layers; no single vendor covers all of
 | Layer | Enterprise vendors | Our stack |
 | --- | --- | --- |
 | Agent identity (IdP) | Microsoft Entra Agent ID (GA 2026), Okta for AI Agents + Agent SSO + Agent Gateway, Ping, Google Cloud Agent Identity, Auth0 for MCP | Keycloak |
-| Governance and lifecycle (IGA) | SailPoint Agentic Fabric, Saviynt Identity Security for AI, OpenText NetIQ, One Identity, Omada, ServiceNow AI Passport, midPoint (open source) | NetIQ IDM + EasyVista |
+| Governance and lifecycle (IGA) | SailPoint Agentic Fabric, Saviynt Identity Security for AI, One Identity, Omada, ServiceNow AI Passport, midPoint (open source) | Existing IDM + CMDB |
 | Privileged access and secrets | Palo Alto Networks Idira (former CyberArk), Delinea, HashiCorp Vault, Aembit (workload IAM) | GitLab ID tokens; vault to decide |
 | Discovery and posture | Astrix, Oasis, Orchid, Silverfort (Gartner "guardian agents" category, Feb 2026) | None |
 | Fine-grained authorization | Cerbos, OPA, OpenFGA/SpiceDB, PlainID, Axiomatics, Permit.io MCP Gateway | Cerbos |
@@ -1389,8 +1389,8 @@ The plan stays; five changes make it hold as the standards settle.
 1. Harden LiteLLM's supply chain and keep authorization out of it (AuthZEN to Cerbos), so the gateway is replaceable.
 2. Add a direct kill switch for agents, outside the IDM sync chain.
 3. Replace token passthrough with per-audience token exchange.
-4. Run a NetIQ proof on agent lifecycle (sponsor, recertification, deprovisioning) before Wave 3.
-5. Assess a discovery tool and a policy for SaaS-native agents (Agentforce, Joule, Workday) before Wave 2.
+4. Run an IDM proof on agent lifecycle (sponsor, recertification, deprovisioning) before Wave 3.
+5. Assess a discovery tool and a policy for SaaS-native agents (Agentforce, Joule, HR-platform agents) before Wave 2.
 
 # Technical annexes
 
@@ -1608,11 +1608,11 @@ grant_type=urn:openid:params:grant-type:ciba
 
 | Event | Actions | Effect |
 | --- | --- | --- |
-| Compromised agent | Agent/team blocked in LiteLLM; deny rule in Cerbos; client disabled in Keycloak and key rotated; technical identities on the targets disabled (SAP user, Salesforce integration user, Workday agent account, …) | Immediate block at the gateway; no new tokens; issued tokens expire within 5 minutes |
-| Person leaving the company | Disabled in LDAP; Keycloak sessions logged out; NetIQ IDM reassigns the agents they sponsored to their manager | No new logins or delegations |
-| Assignment expired or not recertified | NetIQ IDM removes the group/role; GitLab CI propagates to Keycloak, LiteLLM, Cerbos and targets | Permission removed from Keycloak, LiteLLM, Cerbos, targets |
+| Compromised agent | Agent/team blocked in LiteLLM; deny rule in Cerbos; client disabled in Keycloak and key rotated; technical identities on the targets disabled (SAP user, Salesforce integration user, HR-platform agent account, …) | Immediate block at the gateway; no new tokens; issued tokens expire within 5 minutes |
+| Person leaving the company | Disabled in LDAP; Keycloak sessions logged out; the IDM reassigns the agents they sponsored to their manager | No new logins or delegations |
+| Assignment expired or not recertified | The IDM removes the group/role; GitLab CI propagates to Keycloak, LiteLLM, Cerbos and targets | Permission removed from Keycloak, LiteLLM, Cerbos, targets |
 
-The block at the gateway is the immediate action; all the others close the remaining paths. Actions start from EasyVista/NetIQ IDM or from an emergency runbook, both traced.
+The block at the gateway is the immediate action; all the others close the remaining paths. Actions start from the CMDB/IDM or from an emergency runbook, both traced.
 
 ## Token verification and key management
 
@@ -1646,7 +1646,7 @@ JWT_AUDIENCE=litellm-proxy
 | LiteLLM MCP signing key | Secret manager | Published in LiteLLM's JWKS |
 | LiteLLM master key and salt key | Secret manager | Master key rotatable; salt key never changed after startup |
 | SAP AI Core service key | Secret manager | Per SAP BTP policy |
-| Credentials issued by targets (Workday API client, Legisway API user, SynerTrade and Veeva integration users) | Secret manager, read only by the MCP server of that target | Per target policy, rotated by the pipeline |
+| Credentials issued by targets (HR-platform API client, CLM API user, P2P and QMS integration users) | Secret manager, read only by the MCP server of that target | Per target policy, rotated by the pipeline |
 
 Mandatory negative tests: expired token, wrong audience, different issuer, tampered signature, delegated token exchanged again. All must be rejected.
 
@@ -1659,9 +1659,9 @@ The solution scales horizontally because the gateway holds no state and verifies
 | LiteLLM | 1 worker per pod, HPA, stateless pods behind a load balancer |
 | Keycloak | Cluster with distributed cache, multi-site for DR; involved only when tokens are issued and renewed |
 | Cerbos | Sidecar in the LiteLLM pod: scales with the replicas, decisions without a network hop |
-| EasyVista and NetIQ IDM | Outside the critical request path |
+| The CMDB and the IDM | Outside the critical request path |
 | Governance | Permissions on archetypes and attributes: rules grow with agent types, not with the number of agents |
-| Organisation | New BU = groups in NetIQ IDM + LiteLLM team from GitLab CI, no restarts |
+| Organisation | New BU = groups in the IDM + LiteLLM team from GitLab CI, no restarts |
 
 **LiteLLM database**
 
@@ -1695,18 +1695,7 @@ PgBouncer isn't covered by LiteLLM's documentation: if needed, validate it with 
 - [LiteLLM — SAP Generative AI Hub](https://docs.litellm.ai/docs/providers/sap)
 - [Cerbos — LiteLLM and MCP at the gateway](https://www.cerbos.dev/blog/secure-ai-agents-mcp-tools-at-the-gateway-lite-llm-cerbos)
 - [GitLab — OIDC with ID tokens in CI/CD jobs](https://docs.gitlab.com/ee/ci/secrets/id_token_authentication.html)
-- [NetIQ Identity Manager — REST driver](https://www.netiq.com/documentation/identity-manager-47-drivers/generic_rest/toclink.html)
-- [NetIQ Identity Manager — JDBC driver](https://www.netiq.com/documentation/identity-manager-48-drivers/jdbc/data/netiq-identity-manager-driver-for-jdbc.html)
-- [EasyVista Service Manager — API connector](https://learn.microsoft.com/en-us/connectors/easyvistaservicemana)
 - [Salesforce — OAuth 2.0 token exchange handler](https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/token_exchange_handler.htm)
 - [SAP — Cloud Connector for principal propagation](https://learning.sap.com/learning-journeys/Setting-Up-SAP-Build-Work-Zone-standard-edition-and-SAP-Mobile-Start-with-SAP-S-4HANA/setting-up-cloud-connector-for-principal-propagation)
-- [Veeva Vault — Configuring OAuth 2.0 / OpenID Connect profiles](https://platform.veevavault.help/en/lr/43329/)
-- [Veeva Vault API — Client ID](https://general.veevavault.dev/vault-api/references/client-id/)
-- [Veeva Vault API — Download Daily API Usage (log not designed for auditing)](https://limited.veevavault.dev/vault-api/api-reference/26.2/logs/download-daily-api-usage/)
-- [Workday — Configure external agents (Agent System of Record)](https://doc.workday.com/admin-guide/en-us/workday-ai/agents/agent-system-of-record/external-agents/configure-external-agents.html)
-- [Workday — Setup considerations, Agent System of Record](https://doc.workday.com/admin-guide/en-us/workday-ai/agents/agent-system-of-record/agent-management/setup-considerations--agent-system-of-record.html)
-- [Legisway — API integrations](https://wolterskluwer.com/en/solutions/legisway/integrations)
-- [Legisway — packages and API access](https://www.wolterskluwer.com/en/solutions/legisway/pricing-plans)
-- SynerTrade API availability — sources disagree: [GetApp listing](https://www.getapp.com/operations-management-software/a/synertrade-accelerate/), [Makini connector page](https://www.makini.io/integrations/synertrade-procurement)
 - [Analysis of the LiteLLM compromise (JFrog)](https://research.jfrog.com/post/litellm-compromised-teampcp/)
 - [LiteLLM — MCP OAuth passthrough and oauth\_delegate](https://docs.litellm.ai/docs/mcp_oauth_passthrough)
