@@ -10,7 +10,7 @@ AI agents join the same identity model as people, with no new IdP and no new por
 
 | # | Decision | Rationale |
 | --- | --- | --- |
-| 1 | Keycloak 26.8 as the only IdP and broker (LDAP + Google), one realm for people and agents | It is already the SSO of every application (M-Field, Salesforce, SAP, Veeva, Workday, …): extend it, don't add a second one |
+| 1 | Keycloak 26.8 as the only IdP and broker (LDAP + Google), one realm for people and agents | It is already the SSO of every application (the CRM, Salesforce, SAP, Veeva, Workday, …): extend it, don't add a second one |
 | 2 | EasyVista as the authoritative registry of agents (CI class “AI Agent”) | It is to agents what HR is to people; no new portal |
 | 3 | NetIQ Identity Manager as the single identity engine; eDirectory/LDAP as the single source of groups and roles | No second engine: Keycloak and LiteLLM read and map, they never assign |
 | 4 | Self-hosted GitLab + GitLab CI to configure Keycloak, LiteLLM, Cerbos and targets | The merge request is the audit trail; secretless pipelines thanks to OIDC ID tokens |
@@ -19,7 +19,7 @@ AI agents join the same identity model as people, with no new IdP and no new por
 | 7 | User → agent delegation with token exchange and the `act` claim (Keycloak 26.8, preview) in development | In production, until supported: trace `sub` + `azp` |
 | 8 | CIBA for risky actions | Human approval at runtime |
 
-**Superseded**: midPoint, replaced by the NetIQ IDM already in use; Databricks, replaced by M-Field as a use case.
+**Superseded**: midPoint, replaced by the NetIQ IDM already in use; Databricks, replaced by the CRM as a use case.
 
 ## Alignment with the agent identity security model
 
@@ -161,7 +161,7 @@ resourcePolicy:
               - expr: timestamp(R.attr.approval.expires_at) > now()
 ```
 
-The `active_agent` derived role checks that the agent has an active CI, an owner and a verified runtime credential. Everything not allowed is denied. Production policies add data class, user role, business unit and resource sensitivity, as the M-Field and SAP use cases show.
+The `active_agent` derived role checks that the agent has an active CI, an owner and a verified runtime credential. Everything not allowed is denied. Production policies add data class, user role, business unit and resource sensitivity, as the CRM and SAP use cases show.
 
 ### Additions to the design
 
@@ -207,7 +207,7 @@ LiteLLM, Cerbos and every MCP server emit one shared event per tool call, so an 
     "source_channel": "demo-crm-ui",
     "risk_level": "low"
   },
-  "subject": { "sub": "u-1042", "type": "human", "roles": ["informatore"], "bu": "commercial" },
+  "subject": { "sub": "u-1042", "type": "human", "roles": ["sales-rep"], "bu": "commercial" },
   "actor": {
     "client_id": "agent-crm-assistant",
     "agent_ci": "CI-AGT-0042",
@@ -219,8 +219,8 @@ LiteLLM, Cerbos and every MCP server emit one shared event per tool call, so an 
     "grant": "token-exchange",
     "grant_id": "jti-5c0d",
     "delegated_by": "u-1042",
-    "aud": "mcp-mfield",
-    "scope": "mfield:ai-read",
+    "aud": "mcp-crm",
+    "scope": "crm:ai-read",
     "exp": "2026-12-10T09:47:17Z"
   },
   "policy": {
@@ -232,10 +232,10 @@ LiteLLM, Cerbos and every MCP server emit one shared event per tool call, so an 
   },
   "approval": null,
   "tool": {
-    "server": "mcp-mfield",
+    "server": "mcp-crm",
     "server_version": "1.2.0",
     "name": "get_visit_history",
-    "expected_aud": "mcp-mfield",
+    "expected_aud": "mcp-crm",
     "params_sha256": "9c1e..."
   },
   "result": { "status": "ok", "records": 12, "sensitive_fields_redacted": true }
@@ -343,7 +343,7 @@ Dashed lines are configuration, keys and tokens; solid lines are request traffic
 | Keycloak 26.8 | Single IdP: SSO, tokens, agent clients, delegation, CIBA | Already the SSO of all seven target systems |
 | LiteLLM Enterprise + Cerbos | Gateway for models and MCP tools: RBAC (LiteLLM) and ABAC (Cerbos) | Cerbos as a sidecar, fail-closed |
 | MCP servers | Narrow tools towards each target system | Reachable only from the gateway |
-| Target systems | SAP S/4HANA, M-Field, Salesforce, SynerTrade, Veeva Vault, Workday, Legisway | Apply their own roles: PFCG roles, M-Field roles, permission sets, Vault security profiles, Workday security groups |
+| Target systems | SAP S/4HANA, the CRM, Salesforce, SynerTrade, Veeva Vault, Workday, Legisway | Apply their own roles: PFCG roles, CRM roles, permission sets, Vault security profiles, Workday security groups |
 | Model providers | Claude, SAP AI Core (Generative AI Hub) | Credentials only in the gateway |
 | SIEM | Log correlation by correlation ID | Keycloak, LiteLLM, Cerbos, targets |
 
@@ -426,8 +426,8 @@ model_context:
 keycloak:
   client_id: agent-crm-assistant
   auth: federated-k8s                   # federated-k8s | private_key_jwt
-  default_scopes: ["mfield:ai-read"]
-  optional_scopes: ["mfield:ai-write"]
+  default_scopes: ["crm:ai-read"]
+  optional_scopes: ["crm:ai-write"]
   max_token_ttl_s: 300
 
 delegation:
@@ -439,7 +439,7 @@ litellm:
   team: crm-ai
   max_budget_eur_month: 200
   mcp_tools:
-    m-field:
+    crm:
       allowed: [search_accounts, get_visit_history, draft_visit_note]
       denied: [export_accounts, delete_note, send_external_email]
 
@@ -519,42 +519,42 @@ In every case the call goes through LiteLLM, which verifies the token, applies R
 
 Keycloak is already the IdP of every application: adding agents as new clients of the same realm means applications receive tokens with the same issuer, the same keys and the same role claims they already know how to validate. Scopes and audiences are added; the login of people does not change.
 
-### Example: M-Field
+### Example: the CRM
 
-**Today** — Client `m-field` in Keycloak, custom client roles (`informatore`, i.e. medical sales rep, `area-manager`, `medical`, `marketing`) assigned from LDAP groups; M-Field reads them from the JWT in `resource_access.m-field.roles`.
+**Today** — Client `crm` in Keycloak, custom client roles (`sales-rep`, `area-manager`, `medical`, `marketing`) assigned from LDAP groups; the CRM reads them from the JWT in `resource_access.crm.roles`.
 
 **What is added in Keycloak** (all in Terraform, in the `identity-config` repository)
 
-1. Two client scopes, `mfield:ai-read` and `mfield:ai-write`, each with:
-   - an audience mapper that adds `m-field` to the token's `aud`;
-   - a role scope mapping only towards the M-Field roles an agent may use (e.g. `informatore` for reading).
-2. Agent clients with “Full scope allowed” switched off and the M-Field scopes assigned as *optional*: the agent gets them only if it requests them, and only if its archetype provides them.
-3. Result: the agent's token carries only the M-Field roles the user holds **and** the scope admits. Keycloak computes the intersection.
+1. Two client scopes, `crm:ai-read` and `crm:ai-write`, each with:
+   - an audience mapper that adds `crm` to the token's `aud`;
+   - a role scope mapping only towards the CRM roles an agent may use (e.g. `sales-rep` for reading).
+2. Agent clients with “Full scope allowed” switched off and the CRM scopes assigned as *optional*: the agent gets them only if it requests them, and only if its archetype provides them.
+3. Result: the agent's token carries only the CRM roles the user holds **and** the scope admits. Keycloak computes the intersection.
 
 ```hcl
-resource "keycloak_openid_client_scope" "mfield_ai_read" {
+resource "keycloak_openid_client_scope" "crm_ai_read" {
   realm_id               = keycloak_realm.acme.id
-  name                   = "mfield:ai-read"
+  name                   = "crm:ai-read"
   include_in_token_scope = true
 }
 
-resource "keycloak_openid_audience_protocol_mapper" "mfield_ai_read_aud" {
+resource "keycloak_openid_audience_protocol_mapper" "crm_ai_read_aud" {
   realm_id                 = keycloak_realm.acme.id
-  client_scope_id          = keycloak_openid_client_scope.mfield_ai_read.id
-  name                     = "aud-m-field"
-  included_client_audience = "m-field"
+  client_scope_id          = keycloak_openid_client_scope.crm_ai_read.id
+  name                     = "aud-crm"
+  included_client_audience = "crm"
 }
 
-resource "keycloak_generic_role_mapper" "mfield_ai_read_informatore" {
+resource "keycloak_generic_role_mapper" "crm_ai_read_sales_rep" {
   realm_id        = keycloak_realm.acme.id
-  client_scope_id = keycloak_openid_client_scope.mfield_ai_read.id
-  role_id         = data.keycloak_role.mfield_informatore.id
+  client_scope_id = keycloak_openid_client_scope.crm_ai_read.id
+  role_id         = data.keycloak_role.crm_sales_rep.id
 }
 
 resource "keycloak_openid_client_optional_scopes" "agent_crm_assistant" {
   realm_id        = keycloak_realm.acme.id
   client_id       = keycloak_openid_client.agent_crm_assistant.id
-  optional_scopes = [keycloak_openid_client_scope.mfield_ai_read.name]
+  optional_scopes = [keycloak_openid_client_scope.crm_ai_read.name]
 }
 ```
 
@@ -564,20 +564,20 @@ resource "keycloak_openid_client_optional_scopes" "agent_crm_assistant" {
 | --- | --- | --- |
 | `iss` | realm `acme` | realm `acme` (same) |
 | `sub` | maria.rossi | maria.rossi (same) |
-| `aud` | `m-field` | `litellm-proxy`, `m-field` |
-| `azp` | `m-field` | `agent-crm-assistant` |
+| `aud` | `crm` | `litellm-proxy`, `crm` |
+| `azp` | `crm` | `agent-crm-assistant` |
 | `act` | — | `{ client_id: agent-crm-assistant }` |
-| `scope` | `openid profile` | `mfield:ai-read` |
-| `resource_access.m-field.roles` | `informatore`, `area-manager` | `informatore` |
+| `scope` | `openid profile` | `crm:ai-read` |
+| `resource_access.crm.roles` | `sales-rep`, `area-manager` | `sales-rep` |
 
-**What changes in M-Field**
+**What changes in the CRM**
 
 | Change | Needed? |
 | --- | --- |
-| Token validation | None: same issuer, same keys, same audience `m-field` |
+| Token validation | None: same issuer, same keys, same audience `crm` |
 | Reading roles | None: same claim |
 | API with bearer token | Only if today the APIs accept only the web session |
-| AI channel | If the token has `act` or a `mfield:ai-*` scope: extra rules (no export, writes only as drafts without `mfield:ai-write`) |
+| AI channel | If the token has `act` or a `crm:ai-*` scope: extra rules (no export, writes only as drafts without `crm:ai-write`) |
 | Audit | Log `act.client_id` and the correlation ID next to the user |
 
 The same pattern applies wherever a target's API can trust a Keycloak token: Salesforce, already behind Keycloak, through its token exchange handler; SAP through SAP IAS trusting Keycloak; Veeva Vault possibly through its OAuth 2.0 / OpenID Connect profile. Where an API trusts only its own tokens (Workday, Legisway, probably SynerTrade), the MCP server bridges, and the validation section tests what that costs. A separate IdP for agents, or API keys per agent, would force every application to trust a new issuer and to duplicate roles.
@@ -624,9 +624,9 @@ POST /team/new
   "team_alias": "crm-ai",
   "models": ["claude-sonnet"],
   "object_permission": {
-    "mcp_servers": ["m-field"],
+    "mcp_servers": ["crm"],
     "mcp_tool_permissions": {
-      "m-field": ["search_accounts", "get_visit_history", "draft_visit_note"]
+      "crm": ["search_accounts", "get_visit_history", "draft_visit_note"]
     }
   }
 }
@@ -659,13 +659,13 @@ An agent's permissions towards a target system narrow across eight levels, from 
 
 | # | Level | Where | Example | What it prevents |
 | --- | --- | --- | --- | --- |
-| 1 | Visible MCP servers | LiteLLM (team or agent) | Team `crm-ai` sees only the `m-field` server | Access to whole systems not foreseen |
+| 1 | Visible MCP servers | LiteLLM (team or agent) | Team `crm-ai` sees only the `crm` server | Access to whole systems not foreseen |
 | 2 | Allowed tools | LiteLLM (`mcp_tool_permissions`) | Only `search_accounts`, `get_visit_history` | Actions not foreseen: the tool doesn't appear in the list |
 | 3 | Argument patterns | LiteLLM (Tool Permission Guardrail) | `plant` must be `IT01` or `IT02` | Values outside scope or format |
 | 4 | Contextual rules | Cerbos | Amount ≤ €5,000; at most 50 records; only accounts in the user's territory | Disallowed combinations of attributes |
 | 5 | Human approval | CIBA | Order above threshold approved by the manager | High-risk actions without a human |
 | 6 | Tool design | MCP server | `get_purchase_order(id)` instead of `run_odata(query)`; returned fields filtered | Arbitrary queries, field exfiltration |
-| 7 | Identity and role on the target | Target | Display-only PFCG role; limited permission set; minimal M-Field role | Anything the role doesn't allow |
+| 7 | Identity and role on the target | Target | Display-only PFCG role; limited permission set; minimal CRM role | Anything the role doesn't allow |
 | 8 | Volumes and budget | LiteLLM | Rate limit and monthly budget per agent | Abuse, loops, runaway costs |
 
 Design rule: every tool that writes must have at least levels 4, 6 and 7; tools that write into regulated processes also need level 5.
@@ -709,18 +709,18 @@ SAP doesn't understand Keycloak claims: the autonomous agent uses a technical us
 
 Recommendation: correlation + marking in the pilot; alias user only if audit or compliance require the distinction natively in SAP.
 
-## Use case 2: M-Field (commercial CRM)
+## Use case 2: CRM (commercial)
 
-M-Field is the simplest and most complete case: it already reads roles from the Keycloak JWT, so adding scopes and audiences is enough, and it can log the agent in its own audit because it is an in-house application.
+The CRM is the simplest and most complete case: it already reads roles from the Keycloak JWT, so adding scopes and audiences is enough, and it can log the agent in its own audit because it is an in-house application.
 
 ### A — Autonomous agent: visit report quality
 
 | Aspect | Configuration |
 | --- | --- |
 | Purpose | Every night finds incomplete visit reports and creates a reminder for the sales rep |
-| Keycloak identity | Client `agent-mfield-dq`, federated Kubernetes token, scopes `mfield:ai-read` and `mfield:ai-write` |
-| M-Field role (level 7) | Technical role `ai-dq-bot` of the `m-field` client: reads visit reports, creates reminders; no access to physicians' personal data beyond the ID |
-| Server and tools (levels 1–2) | Server `m-field`; tools `list_incomplete_visit_reports`, `create_followup_task` |
+| Keycloak identity | Client `agent-crm-dq`, federated Kubernetes token, scopes `crm:ai-read` and `crm:ai-write` |
+| CRM role (level 7) | Technical role `ai-dq-bot` of the `crm` client: reads visit reports, creates reminders; no access to physicians' personal data beyond the ID |
+| Server and tools (levels 1–2) | Server `crm`; tools `list_incomplete_visit_reports`, `create_followup_task` |
 | Arguments (level 3) | `task_type` must be `data_quality` |
 | Cerbos (level 4) | At most 200 reports per run; reminders only to the rep who owns the report |
 | Tool design (level 6) | `list_incomplete_visit_reports` returns report ID, missing fields, rep ID: no free text, no physician personal data |
@@ -731,12 +731,12 @@ M-Field is the simplest and most complete case: it already reads roles from the 
 | Aspect | Configuration |
 | --- | --- |
 | Scenario | Luca (sales rep) asks for a summary before visiting a physician and for a draft visit note |
-| Token | `sub` = luca, `act` = `agent-crm-assistant`, `aud` includes `m-field`, scope `mfield:ai-read mfield:ai-write` |
-| Roles in the token | Only `informatore`: Luca is also `area-manager`, but the agent's scope doesn't admit it (Keycloak intersection) |
-| Effective permissions | Luca's territorial visibility in M-Field, limited to the tools `get_account_summary`, `get_visit_history`, `draft_visit_note` |
-| Writes | The note is saved as a draft “proposed by the assistant”; it becomes final only when Luca confirms it in the M-Field UI |
+| Token | `sub` = luca, `act` = `agent-crm-assistant`, `aud` includes `crm`, scope `crm:ai-read crm:ai-write` |
+| Roles in the token | Only `sales-rep`: Luca is also `area-manager`, but the agent's scope doesn't admit it (Keycloak intersection) |
+| Effective permissions | Luca's territorial visibility in the CRM, limited to the tools `get_account_summary`, `get_visit_history`, `draft_visit_note` |
+| Writes | The note is saved as a draft “proposed by the assistant”; it becomes final only when Luca confirms it in the CRM UI |
 | Cerbos | No export; at most 20 accounts per request |
-| How the audit tells them apart | M-Field logs user = luca, channel = AI, agent = `act.client_id`, correlation ID: native distinction in the application log |
+| How the audit tells them apart | The CRM logs user = luca, channel = AI, agent = `act.client_id`, correlation ID: native distinction in the application log |
 
 Here the choice of Keycloak makes everything straightforward: no new issuer to trust, roles already in the expected format, permission intersection computed by the IdP.
 
@@ -746,7 +746,7 @@ Salesforce is already behind Keycloak for people's SSO; for agents' API calls it
 
 **Common configuration**
 
-- In Keycloak: client scope `salesforce:ai` with an audience mapper towards `salesforce` (same pattern as M-Field).
+- In Keycloak: client scope `salesforce:ai` with an audience mapper towards `salesforce` (same pattern as the CRM).
 - In Salesforce: one external client app per agent (or per archetype), enabled for token exchange; an Apex handler that checks the signature (realm JWKS), `iss`, `aud` and expiry, and maps the subject.
 - Salesforce MCP server: exchanges the Keycloak token it receives for a Salesforce token and calls the REST APIs.
 
@@ -789,7 +789,7 @@ Every action can be traced from request to data through a correlation ID generat
 | Keycloak | Logins, token issuance, token exchange, consents, CIBA | Native: `azp` and `act` in every token event |
 | LiteLLM | Every call: user, agent, team, model, tool, cost | Native |
 | Cerbos | Decision, rule applied, arguments evaluated | Native |
-| M-Field | Application log | Native, by logging `act.client_id` |
+| The CRM | Application log | Native, by logging `act.client_id` |
 | Salesforce | Login history, API events, `AI_Agent__c` field | Native, through one external client app per agent |
 | SAP S/4HANA | Security Audit Log, change documents | Only via correlation or an “AI” alias user |
 | SynerTrade, Veeva Vault, Workday, Legisway | See *Validating the hypotheses* | To be proven per system (hypothesis H5) |
@@ -820,7 +820,7 @@ Keycloak is the SSO of all seven systems for people, but SSO in the browser does
 | System | API access for the agent (hypothesis) | What the target sees: delegated / autonomous | Riskiest point to verify | Status |
 | --- | --- | --- | --- | --- |
 | SAP S/4HANA | Principal propagation via SAP IAS trusting Keycloak, and Cloud Connector; technical communication user for autonomous agents | The person (MROSSI) / `AI_PO_MON` | IAS trust towards Keycloak and propagation rules; native audit only with an alias user | Not started |
-| M-Field | Keycloak JWT accepted natively (`aud` `m-field`, roles in `resource_access`) | The person + `act.client_id` / role `ai-dq-bot` | The APIs accept a bearer token, not only the web session | Not started |
+| The CRM | Keycloak JWT accepted natively (`aud` `crm`, roles in `resource_access`) | The person + `act.client_id` / role `ai-dq-bot` | The APIs accept a bearer token, not only the web session | Not started |
 | Salesforce | OAuth 2.0 token exchange, with an Apex handler validating the Keycloak token | The person, through the agent's external client app / integration user | Edition and licences for token exchange and Event Monitoring | Not started |
 | SynerTrade (P2P) | Not confirmed: public sources disagree on whether a usable API exists. Hypothesis: vendor API with a technical account held by the MCP server | A technical account in both modes: SynerTrade doesn't see the person | Whether an API exists and can act as a named user; if not, no delegated writes | Not started |
 | Veeva Vault | Vault's OAuth 2.0 / OpenID Connect profile exchanges an IdP access token for a Vault session; the API applies the same access controls as the UI | The person, with their security profile and sharing / dedicated integration user | Vault documents PingFederate, ADFS and Okta as authorization servers (Entra ID in later versions), not Keycloak: test the profile with Keycloak in a sandbox | Not started |
@@ -841,8 +841,8 @@ Each row names something the agent must not do, even where the person could. L1�
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | SAP S/4HANA | Delegated: buyer | Create a purchase order with the assistant | Up to €5,000 without approval, and only in Maria's purchasing org, even if her PFCG roles allow more | L4 Cerbos, L5 CIBA, L7 PFCG | €12,000 order → paused for CIBA approval; order for org 2000 → refused by SAP, logged with `act` |
 | 2 | SAP S/4HANA | Autonomous | Overdue purchase order monitoring | Display only, plants IT01/IT02, no prices | L2, L3, L6, L7 (`ACTVT` 03) | `change_delivery_date` → tool not listed; plant DE01 → guardrail deny; same call straight to SAP → refused (`ACTVT` 02) |
-| 3 | M-Field | Delegated: sales rep | Visit preparation and draft note | Only the `informatore` role, though Luca is also `area-manager`; notes only as drafts; no export | KC, L4, M-Field draft rule | Team-wide report (area-manager function) → 403 from M-Field; export of 500 accounts → Cerbos deny |
-| 4 | M-Field | Autonomous | Incomplete visit reports | No note text or physician personal data; reminders only to the report owner | L4, L6, L7 (`ai-dq-bot`) | Read a full note → refused by the role; reminder to another rep → Cerbos deny |
+| 3 | The CRM | Delegated: sales rep | Visit preparation and draft note | Only the `sales-rep` role, though Luca is also `area-manager`; notes only as drafts; no export | KC, L4, the CRM draft rule | Team-wide report (area-manager function) → 403 from the CRM; export of 500 accounts → Cerbos deny |
+| 4 | The CRM | Autonomous | Incomplete visit reports | No note text or physician personal data; reminders only to the report owner | L4, L6, L7 (`ai-dq-bot`) | Read a full note → refused by the role; reminder to another rep → Cerbos deny |
 | 5 | Salesforce | Delegated: sales rep | Update an opportunity's next step | No change to amount, or stage beyond Negotiation, without approval; only records shared with Giulia | L4, L5, L7 sharing | Change the amount → CIBA; update an opportunity not shared with Giulia → refused by Salesforce |
 | 6 | Salesforce | Autonomous | Lead enrichment | Only `Industry` and `NumberOfEmployees`, on leads in status New | L3, L4, L7 field-level security | Change `OwnerId` → guardrail deny; same call straight to Salesforce → refused by field-level security |
 | 7 | SynerTrade | Delegated: requester | Create a catalogue purchase requisition | Create only, never approve or release; catalogue items only; only the person's cost centre | L2, L4, L6 | Approve own requisition → tool absent; other cost centre → Cerbos deny; check whether SynerTrade also refuses it (if not, H4 fails: no delegated writes) |
@@ -856,7 +856,7 @@ Each row names something the agent must not do, even where the person could. L1�
 
 ### How the tests run
 
-1. A dedicated GitLab CI pipeline, `ai-gateway/validation`, runs the matrix against test environments: SAP QAS, Salesforce sandbox, Vault sandbox, Workday sandbox tenant, and the M-Field, SynerTrade and Legisway test instances.
+1. A dedicated GitLab CI pipeline, `ai-gateway/validation`, runs the matrix against test environments: SAP QAS, Salesforce sandbox, Vault sandbox, Workday sandbox tenant, and the CRM, SynerTrade and Legisway test instances.
 2. Test identities only: test persons in a test LDAP organisational unit with the roles each row needs, and test agents registered through the normal EasyVista → GitLab path, so agent creation is tested too.
 3. Each negative test runs twice: through the gateway (expected: gateway denial) and straight from the MCP server to the target with gateway checks off (expected: target denial). Two denials prove H4.
 4. Evidence per test: request, LiteLLM and Cerbos decisions, target response, target audit entry, correlation ID. It is kept as pipeline artefacts and attached to the EasyVista change record, usable as GxP evidence.
@@ -883,7 +883,7 @@ Pass rule: a target gets write tools only when H1–H5 pass for it. A target tha
 
 - [ ] NetIQ: Identity Manager only, or Identity Governance too? (decides where approvals live)
 - [ ] NetIQ driver for EasyVista: REST or JDBC
-- [ ] M-Field APIs with bearer token and logging of `act`
+- [ ] CRM APIs with bearer token and logging of `act`
 - [ ] SAP IAS trust towards Keycloak and principal propagation rules
 - [ ] Salesforce token exchange handler: edition and licences
 - [ ] Keycloak federated client authentication with GitLab CI ID tokens
@@ -905,7 +905,7 @@ Four waves take the design from a controlled MVP to governed scale, and each wav
 | Wave | Goal | Scope | Team | Demo |
 | --- | --- | --- | --- | --- |
 | 0 · Foundation (MVP) | A controlled, meaningful demo of the technical flows only | Keycloak, LiteLLM as AI and MCP gateway, one MCP server, one custom target app ending in a user UI; synthetic data | Core team (4) | Before 15 Dec 2026, after one 3-week sprint |
-| 1 · Validation | First real integrations; hypotheses H1–H5 on real systems | SAP S/4HANA, M-Field | Core team + 2 | 20 Jan 2027 |
+| 1 · Validation | First real integrations; hypotheses H1–H5 on real systems | SAP S/4HANA, the CRM | Core team + 2 | 20 Jan 2027 |
 | 2 · Validation 2 | Same approach on more applications | Salesforce, SynerTrade, Veeva Vault, Workday, Legisway | To confirm | 20 Feb 2027 |
 | 3 · Scale and control | Governance layer and scale | NetIQ IDM, EasyVista CMDB, GitLab CI pipelines, reconciliation, revocation (H6), HA and DR | To define | To define |
 
@@ -923,12 +923,12 @@ The MVP proves, on synthetic data, that a person and two agents reach one custom
 | --- | --- | --- |
 | Identity | Keycloak 26.8 in dev, one realm `ai-demo`, synthetic test users | LDAP federation, NetIQ IDM (Wave 3) |
 | Gateway | LiteLLM proxy (Enterprise trial, needed for JWT auth): model, MCP gateway, one team per agent, tool permissions, argument guardrail | Cerbos ABAC, CIBA approvals (Wave 1) |
-| Target | `demo-crm`, a custom app with API and web UI, seeded with synthetic accounts and visits | SAP and M-Field (Wave 1); five more apps (Wave 2) |
+| Target | `demo-crm`, a custom app with API and web UI, seeded with synthetic accounts and visits | SAP and CRM (Wave 1); five more apps (Wave 2) |
 | Agents | Delegated `crm-assistant` (token exchange with `act`) and autonomous `agent-dq` (client credentials) | Agent registry in EasyVista (Wave 3) |
 | Configuration | Terraform and YAML in a GitLab repository, applied by the team | GitLab CI pipelines driven by NetIQ IDM (Wave 3) |
 | Operations | One Docker Compose stack; logs in LiteLLM and in the app | HA, DR, SIEM (Wave 3) |
 
-`demo-crm` is built like M-Field on purpose: client roles in the Keycloak JWT and the same scope pattern, so Wave 1 moves to M-Field by changing configuration, not code.
+`demo-crm` is built like the CRM on purpose: client roles in the Keycloak JWT and the same scope pattern, so Wave 1 moves to the CRM by changing configuration, not code.
 
 **Architecture**
 
@@ -1019,7 +1019,7 @@ services:
   redis:         { image: redis:7 }
 ```
 
-**2. Keycloak realm** — the M-Field pattern in miniature: one scope `crm:ai` that adds the audiences and admits only the `rep` role, so the manager role can never reach an agent.
+**2. Keycloak realm** — the CRM pattern in miniature: one scope `crm:ai` that adds the audiences and admits only the `rep` role, so the manager role can never reach an agent.
 
 ```hcl
 # keycloak/main.tf (abridged)
@@ -1274,7 +1274,7 @@ The sprint runs from Monday 23 November to Friday 11 December, with the demo rel
 | JWT auth and audit are Enterprise features | Trial licence requested this week | None: required for the demo |
 | Model access from the demo environment | Network route and API key approved | The model through SAP AI Core, if already reachable |
 
-### Wave 1 — Validation: SAP and M-Field (demo 20 Jan 2027)
+### Wave 1 — Validation: SAP and CRM (demo 20 Jan 2027)
 
 **Team**: core team + 2.
 
@@ -1282,17 +1282,17 @@ Wave 1 swaps the demo app for two real systems and keeps the same flows: use cas
 
 | Workstream | What changes from Wave 0 | Done when |
 | --- | --- | --- |
-| M-Field | Scopes `mfield:ai-read` and `mfield:ai-write` on the corporate Keycloak (test); MCP server `m-field` ported from demo-crm-mcp; M-Field logs `act.client_id` | Use case 2, A and B, runs; rows 3–4 pass |
+| The CRM | Scopes `crm:ai-read` and `crm:ai-write` on the corporate Keycloak (test); MCP server `crm` ported from demo-crm-mcp; the CRM logs `act.client_id` | Use case 2, A and B, runs; rows 3–4 pass |
 | SAP S/4HANA | Technical user `AI_PO_MON` with a display role (autonomous); principal propagation through SAP IAS and Cloud Connector (delegated) | Use case 1, A and B, runs on QAS; rows 1–2 pass |
 | Policy | Cerbos behind the LiteLLM guardrail; CIBA for orders above €5,000 | The €12,000 order waits for approval |
-| Validation | `ai-gateway/validation` pipeline in GitLab CI runs rows 1–4, each through the gateway and directly | H1–H5 status set for SAP and M-Field |
+| Validation | `ai-gateway/validation` pipeline in GitLab CI runs rows 1–4, each through the gateway and directly | H1–H5 status set for SAP and CRM |
 
 **Request during Wave 0**: these have lead times and the Christmas break (24 Dec–6 Jan) leaves about three and a half working weeks before the demo.
 
 - [ ] SAP IAS trust towards Keycloak, and Cloud Connector for QAS
 - [ ] SAP QAS technical user and display role (`Z_AI_PO_DISPLAY`)
-- [ ] M-Field test environment whose API accepts bearer tokens
-- [ ] Test users with M-Field and SAP roles in the corporate test realm
+- [ ] CRM test environment whose API accepts bearer tokens
+- [ ] Test users with CRM and SAP roles in the corporate test realm
 
 ### Wave 2 — Validation 2: five more applications (demo 20 Feb 2027)
 
@@ -1557,7 +1557,7 @@ LiteLLM admits the request (valid token, team, MCP permissions, Cerbos), then ca
 | Mode | When | How it works |
 | --- | --- | --- |
 | JWT signed by LiteLLM (`mcp_jwt_signer`) | Default for internal MCP servers | LiteLLM verifies the incoming token and signs its own short RS256 JWT (`aud=mcp`, TTL 300 s) with the verified claims; the MCP server checks LiteLLM's JWKS |
-| Separate delegated bearer (`oauth_delegate`) | The target must see the user (M-Field, SAP) | LiteLLM admits the call with its own token and forwards a second bearer, with the target's audience, that the client obtained from Keycloak; spend and rate limits stay in LiteLLM |
+| Separate delegated bearer (`oauth_delegate`) | The target must see the user (the CRM, SAP) | LiteLLM admits the call with its own token and forwards a second bearer, with the target's audience, that the client obtained from Keycloak; spend and rate limits stay in LiteLLM |
 | ID-JAG (`oauth2_id_jag`) | MCP servers with their own authorization server (SaaS) | The exchange goes through the IdP that applies the policy; experimental in Keycloak, to use once supported |
 
 Shared rules:
