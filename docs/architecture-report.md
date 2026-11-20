@@ -41,6 +41,43 @@ The design follows the five-layer model for agent identity (registration, runtim
 | 1–2 · Validation | Task context, bound approvals, adversarial tests on real targets |
 | 3 · Scale and governance | Registration at scale (IDM, EasyVista, k-agents), discovery of shadow agents, full evidence chain in the SIEM |
 
+### Key concepts from the reference model
+
+> **"If a high-risk action passes only the identity gate, it is under-governed."** — [Penligent, AI Agent Identity Security](https://www.penligent.ai/hackinglabs/ai-agent-identity-security/)
+
+The central risk is not a stolen password: it is an agent with valid credentials and an approved tool that still acts outside the business intent, and leaves logs that look normal. The answer is to tie owner, intent, authorization, delegation, runtime and evidence into one chain that can be governed and revoked.
+
+Reference diagrams in the article: [identity model comparison](https://www.penligent.ai/hackinglabs/wp-content/uploads/2026/06/image-116.png) and the agent delegation chain (see the article).
+
+**Service account versus AI agent, and our answer**
+
+| Aspect | Service account | AI agent | Our design |
+| --- | --- | --- | --- |
+| Owner | Application or platform team | A named person plus a technical owner | Sponsor and owner team in the EasyVista CI; review when the sponsor leaves |
+| Behaviour | Fixed code path | Chooses tools based on context | Tools allow-listed per agent in LiteLLM; Cerbos per call |
+| Main risk | Over-broad static rights | Same, plus prompt injection, task drift, lost delegation | Role intersection, task context, adversarial tests A1–A7 |
+| Credential | Static secret or role | Runtime identity plus short task-bound token | ServiceAccount token or private\_key\_jwt; 5-minute delegated tokens |
+| Audit question | Which service called what | Who started it, which agent acted, by which tool path, within scope or not | Evidence schema: subject, actor, task, grant, decision, result |
+
+**The three gates before a high-risk action**
+
+| Gate | Checks | In our design |
+| --- | --- | --- |
+| Identity | Known, owned agent in an approved runtime | Keycloak client per agent, workload credential, active CI |
+| Authorization | This action, for this task, subject and scope | Downscoped token, Cerbos decision, bound CIBA approval |
+| Evidence | Action can be rebuilt end to end | Evidence event with task and approval IDs in the SIEM |
+
+**Credential patterns**
+
+| Pattern | Our position |
+| --- | --- |
+| Static API key or personal token | Forbidden for agents |
+| Shared service account | Forbidden: one identity per agent |
+| User token passthrough | Forbidden: token exchange with `act` instead |
+| Delegated OAuth token | Allowed only short-lived, audience-bound, task-bound |
+| Workload identity (Kubernetes, SPIFFE) | Preferred way for the agent to prove itself |
+| Transaction-bound token | To evaluate for high-risk, multi-hop calls |
+
 ### Additions to the design
 
 Six additions close the gaps; each has an owner component and a test.
