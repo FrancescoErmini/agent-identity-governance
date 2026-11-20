@@ -78,6 +78,64 @@ Reference diagrams in the article: [identity model comparison](https://www.penli
 | Workload identity (Kubernetes, SPIFFE) | Preferred way for the agent to prove itself |
 | Transaction-bound token | To evaluate for high-risk, multi-hop calls |
 
+### Six components, governed before the first tool call
+
+The reference model sets six components that must be in place before an agent can call any tool. All six map to an existing part of our design; authorization becomes a decision taken at every call, not a permission assigned once.
+
+| # | Component | In our design | Where |
+| --- | --- | --- | --- |
+| 1 | Register every agent before production | EasyVista CI with sponsor, owner team, version, purpose, allowed tools, data classes, token and delegation policy, approvals, expiry; no Keycloak client without an active CI | EasyVista, NetIQ IDM, reconciliation |
+| 2 | The agent authenticates as itself | One Keycloak client per agent; Kubernetes ServiceAccount token or private\_key\_jwt; no human tokens, no shared secrets | Keycloak |
+| 3 | Every delegated action carries both identities | Token exchange keeps the user in `sub` and the agent in `act`; no impersonation | Keycloak, target apps |
+| 4 | Step-up for high-risk actions | Six action classes in Cerbos; CIBA approval bound to the call | Cerbos, Keycloak CIBA |
+| 5 | Tools scoped as if misused | Narrow MCP tools per target; parameters validated in the MCP server and in the target, not in the prompt | MCP servers, targets |
+| 6 | Evidence for every important action | Evidence event per tool call (schema below) | LiteLLM, Cerbos, MCP servers, SIEM |
+
+**Runtime policy in Cerbos** — our equivalent of the reference model's deny-by-default rule: every call needs an active agent, a matching audience, a task and a short token; high-risk classes also need an approval that is not the agent's own.
+
+```yaml
+# cerbos/policies/mcp_tool.yaml
+apiVersion: api.cerbos.dev/v1
+resourcePolicy:
+  resource: mcp_tool
+  version: default
+  importDerivedRoles: [agent_roles]
+  rules:
+    - name: low-risk-tool
+      actions: ["invoke"]
+      derivedRoles: [active_agent]
+      effect: EFFECT_ALLOW
+      condition:
+        match:
+          all:
+            of:
+              - expr: R.attr.name in P.attr.allowed_tools
+              - expr: R.attr.action_class in ["read", "draft"]
+              - expr: P.attr.token_aud == R.attr.expected_aud
+              - expr: P.attr.token_ttl_s <= 900
+              - expr: has(P.attr.task_id) && P.attr.task_id != ""
+
+    - name: high-risk-tool
+      actions: ["invoke"]
+      derivedRoles: [active_agent]
+      effect: EFFECT_ALLOW
+      condition:
+        match:
+          all:
+            of:
+              - expr: R.attr.name in P.attr.allowed_tools
+              - expr: R.attr.action_class in ["export", "external_comm", "financial", "access_control", "prod_change", "code_exec"]
+              - expr: P.attr.token_aud == R.attr.expected_aud
+              - expr: P.attr.token_ttl_s <= 300
+              - expr: has(P.attr.task_id) && P.attr.task_id != ""
+              - expr: has(R.attr.approval) && R.attr.approval.task_id == P.attr.task_id
+              - expr: R.attr.approval.approved_by != P.id
+              - expr: R.attr.approval.params_sha256 == R.attr.params_sha256
+              - expr: timestamp(R.attr.approval.expires_at) > now()
+```
+
+The `active_agent` derived role checks that the agent has an active CI, an owner and a verified runtime credential. Everything not allowed is denied. Production policies add data class, user role, business unit and resource sensitivity, as the M-Field and SAP use cases show.
+
 ### Additions to the design
 
 Six additions close the gaps; each has an owner component and a test.
@@ -106,17 +164,48 @@ LiteLLM, Cerbos and every MCP server emit one shared event per tool call, so an 
 
 ```json
 {
+  "event_type": "agent_tool_call",
   "event_id": "evt-7f3a",
   "time": "2026-12-10T09:42:17Z",
-  "correlation_id": "c-91be",
-  "task": { "id": "task-2219", "purpose": "visit preparation" },
-  "subject": { "sub": "u-1042", "type": "human" },
-  "actor": { "client_id": "agent-crm-assistant", "agent_ci": "CI-AGT-0042", "version": "model=claude-sonnet;prompt=v7" },
-  "delegation": { "grant": "token-exchange", "aud": "mcp-mfield", "scope": "mfield:ai-read", "exp": "2026-12-10T09:47:17Z" },
-  "policy": { "engine": "cerbos", "decision": "ALLOW", "policy_version": "crm-tools@14", "action_class": "read" },
+  "evidence_chain_id": "evc-91be",
+  "task": {
+    "id": "task-2219",
+    "purpose": "visit preparation",
+    "source_channel": "demo-crm-ui",
+    "risk_level": "low"
+  },
+  "subject": { "sub": "u-1042", "type": "human", "roles": ["informatore"], "bu": "commercial" },
+  "actor": {
+    "client_id": "agent-crm-assistant",
+    "agent_ci": "CI-AGT-0042",
+    "owner_team": "team-crm-digital",
+    "version": "model=claude-sonnet;prompt=v7",
+    "runtime_identity": "system:serviceaccount:ai-agents:crm-assistant"
+  },
+  "delegation": {
+    "grant": "token-exchange",
+    "grant_id": "jti-5c0d",
+    "delegated_by": "u-1042",
+    "aud": "mcp-mfield",
+    "scope": "mfield:ai-read",
+    "exp": "2026-12-10T09:47:17Z"
+  },
+  "policy": {
+    "engine": "cerbos",
+    "policy_version": "mcp_tool@14",
+    "decision": "ALLOW",
+    "rule": "low-risk-tool",
+    "action_class": "read"
+  },
   "approval": null,
-  "tool": { "server": "mcp-mfield", "name": "get_visit_history", "params_sha256": "9c1e..." },
-  "result": { "status": "ok", "records": 12 }
+  "tool": {
+    "server": "mcp-mfield",
+    "server_version": "1.2.0",
+    "name": "get_visit_history",
+    "expected_aud": "mcp-mfield",
+    "params_sha256": "9c1e..."
+  },
+  "result": { "status": "ok", "records": 12, "sensitive_fields_redacted": true }
 }
 ```
 
@@ -128,6 +217,46 @@ Parameters are stored as a hash, not in clear text, so evidence carries no perso
 - Token audience different from the MCP server that received it.
 - Call with a `task_id` that is closed or revoked.
 - Agent version in the event different from the version in the EasyVista CI.
+
+The two core detections, written against the evidence index (SQL-style; the same logic goes into the SIEM rule language):
+
+```sql
+-- High-risk call without a valid approval or delegation
+SELECT time, actor.client_id, actor.owner_team, subject.sub,
+       tool.name, task.id, policy.decision
+FROM agent_evidence
+WHERE event_type = 'agent_tool_call'
+  AND policy.action_class IN ('export','external_comm','financial',
+                              'access_control','prod_change','code_exec')
+  AND (approval IS NULL OR delegation.exp < time OR policy.decision <> 'ALLOW');
+
+-- Token used on the wrong audience
+SELECT time, actor.client_id, tool.name, delegation.aud, tool.expected_aud
+FROM agent_evidence
+WHERE event_type = 'agent_tool_call'
+  AND delegation.aud <> tool.expected_aud;
+```
+
+These queries only work on structured evidence; raw HTTP or prompt logs cannot answer them.
+
+### Identity validation workflow
+
+Tests target identity and authority, not only prompts: the question is whether hostile input can make the agent use real authority wrongly. Each step of the reference workflow maps to a part of our validation plan.
+
+| Step | What we check | Our test |
+| --- | --- | --- |
+| Inventory | Every agent, owner, environment, model version, tool server, token source, data class, schedule; including low-code and copilots | Nightly reconciliation; discovery tool (Wave 3) |
+| Identity binding | Own identity per agent; no human token, shared account, long-lived key | H1; review of every Keycloak `agent-*` client |
+| Scopes per tool | Purpose, audience, data classes, allowed and denied methods, high-risk list | Tool catalogue per MCP server; Cerbos policy tests in CI |
+| Delegation trace | Subject, agent, scope, task and approval kept at every hop | H2, A3, A4 |
+| Token lifecycle | Expiry, revocation, audience, replay, owner removal; no fallback to a broader credential | A6; owner-leaves case in the lifecycle table |
+| Approval boundary | Stale, duplicated, cross-resource and read-for-write approvals | A2 |
+| Local tool servers | Origin, DNS rebinding, localhost exposure, content-type, unauthenticated endpoints | A5 |
+| Confused deputy | Hostile instructions in records, documents, tool descriptions and MCP responses change tools or parameters? | A1 |
+| Evidence | Every high-risk test leaves a complete evidence event | Check on every A-test |
+| Regression | Rerun after changes to model, prompt, tools, policies, MCP servers, data sources, runtime | A7; full suite in the GitLab pipeline |
+
+Tests run only on systems we own or are authorized to test, with synthetic identities and data.
 
 ### Adversarial tests
 
