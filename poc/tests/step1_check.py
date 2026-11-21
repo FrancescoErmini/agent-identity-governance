@@ -123,6 +123,21 @@ def main():
     s, b = http("GET", f"{GATEWAY}/v1/models", token("other-app", "giulia"))
     check("valid token from a client without a LiteLLM team refused", s in (401, 403, 404), s)
 
+    s, b = http("GET", f"{GATEWAY}/v1/models", "sk-not-a-real-key")
+    check("unknown LiteLLM key refused", s in (400, 401, 403), s)
+
+    print("\nLiteLLM admin (master key and admin UI still use LiteLLM's own auth)")
+    s, b = http("GET", f"{GATEWAY}/team/list", MASTER_KEY)
+    check("master key reaches the admin API", s == 200, s)
+    s, b = http("POST", f"{GATEWAY}/v2/login", body={"username": "admin", "password": MASTER_KEY})
+    ui_key = None
+    if s == 200 and isinstance(b, dict) and b.get("token"):
+        ui_key = claims(b["token"]).get("key")
+    check("admin UI login returns a session", ui_key is not None, (s, str(b)[:200]))
+    s1, _ = http("GET", f"{GATEWAY}/management/v1/users/me", ui_key)
+    s2, _ = http("GET", f"{GATEWAY}/team/list", ui_key)
+    check("admin UI session works on the UI's API calls (no 401)", s1 == 200 and s2 == 200, (s1, s2))
+
     marker = f"step1-{uuid.uuid4()}"
     s, b = http("POST", f"{GATEWAY}/v1/chat/completions", luca,
                 {"model": "demo-mock", "messages": [{"role": "user", "content": marker}]})

@@ -7,7 +7,7 @@ It is built in steps. Each step ends with a check script that passes from a clea
 
 | Step | What it adds | Check |
 | --- | --- | --- |
-| **1 · Stack and identity** ✓ | Keycloak realm, LiteLLM gateway that verifies Keycloak tokens, demo-crm API with synthetic data | `tests/step1_check.py`: 17 checks |
+| **1 · Stack and identity** ✓ | Keycloak realm, LiteLLM gateway that verifies Keycloak tokens, demo-crm API with synthetic data | `tests/step1_check.py`: 21 checks |
 | **2 · Agents** ✓ | MCP server, UI with “via agent” badges, `agent-dq`, `crm-assistant` with token exchange | `tests/step2_check.py`: acts 1–4, 16 checks |
 | 3 · Controls | Tool permissions, “draft only” guardrail, direct-call test, kill switch | All seven acts |
 | 4 · Demo pack | Demo script, evidence | — |
@@ -23,7 +23,7 @@ docker compose up -d --build      # about 1 minute the first time
 docker compose --profile check run --rm check
 ```
 
-The last command should end with `17/17 checks passed` and `16/16 checks passed`.
+The last command should end with `21/21 checks passed` and `16/16 checks passed`.
 
 To use the UI, add this line to `/etc/hosts` once (`sudo nano /etc/hosts` on a Mac). Tokens are
 issued for `sso.demo.local`, so the name must match inside and outside Docker:
@@ -40,7 +40,8 @@ secure origin, and `localhost` counts as one). Sign in as `luca` / `luca`. Keycl
 | --- | --- | --- |
 | **demo-crm UI** | http://localhost:3000 | `luca` / `luca` (or `giulia`, `marco`) |
 | Keycloak admin | http://sso.demo.local:8080 | `admin` / `KC_ADMIN_PASSWORD` |
-| LiteLLM gateway | http://localhost:4000 | a Keycloak token, or the master key for admin |
+| LiteLLM gateway | http://localhost:4000 | a Keycloak token (agents and people) |
+| LiteLLM admin UI | http://localhost:4000/ui | `admin` / `LITELLM_MASTER_KEY` |
 | demo-crm API | http://localhost:8081/docs | a Keycloak token |
 
 Without a model the assistant runs a fixed plan (*scripted mode*): every identity and permission
@@ -99,7 +100,8 @@ Synthetic users (dev only, password = username):
   Enterprise only. The same check is done by a small `custom_auth` hook, `litellm/keycloak_auth.py`
   (open source): it verifies issuer, audience and signature, then passes LiteLLM the person (`sub`) and
   the client (`azp`, one team per agent). LiteLLM's team checks still run after it, and the MCP endpoint
-  uses the same hook. With the Enterprise trial, remove `custom_auth` from `litellm/config.yaml` and set
+  uses the same hook. Anything that is not a Keycloak token (master key, admin UI session, LiteLLM
+  virtual keys) goes on to LiteLLM's own auth, so the admin UI works as usual. With the Enterprise trial, remove `custom_auth` from `litellm/config.yaml` and set
   `enable_jwt_auth` as in the report.
 - **Keycloak is configured by realm import plus a Python script against the admin API, not Terraform.** Nothing extra to
   install, and it is still configuration as code. Terraform can come with Wave 1.

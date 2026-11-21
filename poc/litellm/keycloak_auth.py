@@ -12,6 +12,9 @@ token with sub = person and act = agent). LiteLLM forwards Authorization upstrea
 differs from the admission key (oauth_delegate). This hook verifies both, checks that the
 upstream token belongs to the admitted agent, and logs the person.
 
+Anything that is not a Keycloak token (the master key, the admin UI session, LiteLLM virtual
+keys) goes on to LiteLLM's own auth unchanged, so the admin UI at /ui keeps working.
+
 With the Enterprise licence, remove `custom_auth` from config.yaml and use enable_jwt_auth.
 """
 import os
@@ -22,15 +25,15 @@ from litellm.proxy._types import LitellmUserRoles, UserAPIKeyAuth
 
 ISSUER = os.environ.get("OIDC_ISSUER", "http://sso.demo.local:8080/realms/ai-demo")
 AUDIENCE = os.environ.get("OIDC_AUDIENCE", "litellm-proxy")
-MASTER_KEY = os.environ["LITELLM_MASTER_KEY"]
 
 _jwks = jwt.PyJWKClient(f"{ISSUER}/protocol/openid-connect/certs", cache_keys=True, lifespan=300)
 
 
-async def user_api_key_auth(request: Request, api_key: str) -> UserAPIKeyAuth:
-    # Operators only (team setup, kill switch). Agents and people never hold it.
-    if api_key == MASTER_KEY:
-        return UserAPIKeyAuth(api_key=api_key, user_id="litellm-admin", user_role=LitellmUserRoles.PROXY_ADMIN)
+async def user_api_key_auth(request: Request, api_key: str) -> UserAPIKeyAuth | str:
+    # Not a Keycloak token (master key, admin UI session, LiteLLM virtual key): hand it back
+    # unchanged and LiteLLM's own auth decides. Every Keycloak token is verified here, strictly.
+    if not _issued_by_keycloak(api_key):
+        return api_key
 
     claims = _verify(api_key)
     agent = claims["azp"]
@@ -66,3 +69,13 @@ def _verify(token: str) -> dict:
         return jwt.decode(token, key, algorithms=["RS256"], audience=AUDIENCE, issuer=ISSUER)
     except jwt.PyJWTError as exc:
         raise Exception(f"invalid token: {exc}") from exc
+
+
+def _issued_by_keycloak(token: str) -> bool:
+    """True for anything shaped like a JWT whose (unverified) issuer is our realm; _verify then checks it."""
+    if not token or token.count(".") != 2:
+        return False
+    try:
+        return jwt.decode(token, options={"verify_signature": False}).get("iss") == ISSUER
+    except jwt.PyJWTError:
+        return False
