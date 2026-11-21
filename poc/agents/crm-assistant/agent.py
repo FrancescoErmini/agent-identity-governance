@@ -110,8 +110,13 @@ async def _agent_loop(session, token: str, correlation_id: str, message: str, st
     listed = await session.list_tools()
     tools = [{"type": "function", "function": {"name": t.name, "description": t.description or "",
                                                "parameters": t.inputSchema}} for t in listed.tools]
-    messages = [{"role": "system", "content": "You help a sales rep with demo-crm. Use the tools. "
-                                              "Notes are always saved as drafts for the rep to confirm."},
+    messages = [{"role": "system", "content": (
+        "You help a sales rep with demo-crm. Use the tools. Notes are always saved as drafts for the rep "
+        "to confirm. You act with a delegated token that carries only the sales-rep role, even when the "
+        "rep has more roles. If a tool is refused (403 from demo-crm, or not allowed by the gateway), "
+        "say that you, the assistant, are not allowed to do it on their behalf, and that they can do it "
+        "themselves in demo-crm if their own role allows it. Never tell them they lack the permission. "
+        "Answer in the user's language.")},
                 {"role": "user", "content": message}]
     for _ in range(6):
         reply = await chat(token, correlation_id, MODEL, messages, tools)
