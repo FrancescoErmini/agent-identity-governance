@@ -1,0 +1,146 @@
+# Wave 0 Foundation MVP. Start with: docker compose up -d --build
+# Every image is pinned by multi-arch digest (amd64 and arm64, so Apple Silicon works). LiteLLM is v1.110.2.
+name: ai-gateway-mvp
+
+x-kc-issuer: &kc_issuer http://sso.demo.local:8080/realms/ai-demo
+
+services:
+  keycloak:
+    image: keycloak/keycloak:26.8@sha256:7e66a96e4739239070aeaf72e4c5decf0f7f682cfc725b9f7ea2b336eaba38b3
+    command: start-dev --import-realm --features=token-exchange-delegation,parameterized-scopes
+    environment:
+      KC_HOSTNAME: http://sso.demo.local:8080      # same issuer inside and outside the network
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:?set it in .env}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://pg-keycloak/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:?set it in .env}
+    volumes: ["./keycloak/realm-ai-demo.json:/opt/keycloak/data/import/realm-ai-demo.json:ro"]
+    ports: ["8080:8080"]
+    networks: { demo: { aliases: [sso.demo.local] } }
+    depends_on: { pg-keycloak: { condition: service_healthy } }
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  keycloak-config:                                 # one-shot: settings the realm import can't hold
+    image: python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+    command: ["python", "-u", "/config/configure.py"]
+    environment: { KC_ADMIN_PASSWORD: "${KC_ADMIN_PASSWORD}" }
+    volumes: ["./keycloak/configure.py:/config/configure.py:ro"]
+    networks: [demo]
+    depends_on: { keycloak: { condition: service_healthy } }
+    restart: "no"
+
+  litellm:
+    image: litellm/litellm:main-stable@sha256:ef798594ca3db8d81bad2e1439f536f49b71fe095ee9f20416f5e149b4e22035
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+      - ./litellm/keycloak_auth.py:/app/keycloak_auth.py:ro
+    ports: ["4000:4000"]
+    environment:
+      DATABASE_URL: postgresql://litellm:${LITELLM_DB_PASSWORD}@pg-litellm/litellm
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set it in .env}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-not-set}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-not-set}
+      STORE_MODEL_IN_DB: "False"
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"         # no fetch from GitHub at start-up
+      OIDC_ISSUER: *kc_issuer
+      OIDC_AUDIENCE: litellm-proxy
+    networks: [demo]
+    depends_on:
+      pg-litellm: { condition: service_healthy }
+      redis: { condition: service_started }
+      keycloak: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness')\""]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  litellm-setup:                                   # one-shot: one LiteLLM team per Keycloak client
+    image: curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+    entrypoint: ["/bin/sh", "/setup/setup-teams.sh"]
+    environment: { LITELLM_MASTER_KEY: "${LITELLM_MASTER_KEY}" }
+    volumes: ["./litellm/setup-teams.sh:/setup/setup-teams.sh:ro"]
+    networks: [demo]
+    depends_on: { litellm: { condition: service_healthy } }
+    restart: "no"
+
+  demo-crm-api:
+    build: ./demo-crm/api
+    environment:
+      DATABASE_URL: postgresql://crm:${CRM_DB_PASSWORD}@pg-crm/crm
+      OIDC_ISSUER: *kc_issuer
+      OIDC_AUDIENCE: demo-crm
+    ports: ["8081:8080"]
+    networks: [demo]
+    depends_on:
+      pg-crm: { condition: service_healthy }
+      keycloak-config: { condition: service_completed_successfully }
+
+  demo-crm-ui:                                     # where every flow ends: http://localhost:3000
+    build: ./demo-crm/ui
+    ports: ["3000:3000"]
+    networks: [demo]
+    depends_on: [demo-crm-api, crm-assistant, agent-dq]
+
+  demo-crm-mcp:
+    build: ./mcp-servers/demo-crm
+    networks: [demo]
+    depends_on: [demo-crm-api]
+
+  crm-assistant:                                   # delegated agent
+    build: { context: ./agents, dockerfile: crm-assistant/Dockerfile }
+    environment:
+      OIDC_ISSUER: *kc_issuer
+      LLM_MODEL: ${LLM_MODEL:-}                    # gpt, claude-sonnet, or empty for scripted mode; keys stay in LiteLLM
+    ports: ["8082:8000"]
+    networks: [demo]
+    depends_on: [litellm-setup, demo-crm-mcp]
+
+  agent-dq:                                        # autonomous agent
+    build: { context: ./agents, dockerfile: dq/Dockerfile }
+    environment:
+      OIDC_ISSUER: *kc_issuer
+    ports: ["8083:8000"]
+    networks: [demo]
+    depends_on: [litellm-setup, demo-crm-mcp]
+
+  pg-keycloak:
+    image: postgres:16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f
+    environment: { POSTGRES_DB: keycloak, POSTGRES_USER: keycloak, POSTGRES_PASSWORD: "${KC_DB_PASSWORD}" }
+    networks: [demo]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U keycloak"], interval: 3s, retries: 30 }
+  pg-litellm:
+    image: postgres:16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f
+    environment: { POSTGRES_DB: litellm, POSTGRES_USER: litellm, POSTGRES_PASSWORD: "${LITELLM_DB_PASSWORD}" }
+    networks: [demo]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U litellm"], interval: 3s, retries: 30 }
+  pg-crm:
+    image: postgres:16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f
+    environment: { POSTGRES_DB: crm, POSTGRES_USER: crm, POSTGRES_PASSWORD: "${CRM_DB_PASSWORD}" }
+    networks: [demo]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U crm"], interval: 3s, retries: 30 }
+  redis:
+    image: redis:7@sha256:2e3eb11462c4e3759e6972678dd051d150ff54b1e60714b3c33b701260172a90
+    networks: [demo]
+
+  check:                                           # scripted checks: docker compose run --rm check
+    image: python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+    profiles: [check]
+    command: ["sh", "-c", "python -u /tests/step1_check.py && python -u /tests/step2_check.py"]
+    volumes: ["./tests:/tests:ro"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+    networks: [demo]
+
+networks:
+  demo: {}
