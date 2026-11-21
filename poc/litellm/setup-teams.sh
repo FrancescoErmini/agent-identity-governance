@@ -16,7 +16,7 @@ new_team() {   # $1 team_id = Keycloak client_id, $2 JSON with the rest
 new_team demo-cli '"models": ["claude-sonnet", "demo-mock"]'
 
 # Agents: each sees only its own tools on demo_crm.
-new_team agent-crm-assistant '"models": ["claude-sonnet", "demo-mock"],
+new_team agent-crm-assistant '"models": ["gpt", "claude-sonnet", "demo-mock"],
   "object_permission": {"mcp_servers": ["demo_crm"], "mcp_tool_permissions": {"demo_crm":
     ["search_accounts", "get_account_summary", "list_visits", "draft_visit_note", "get_team_report"]}}'
 new_team agent-dq '"models": ["demo-mock"],

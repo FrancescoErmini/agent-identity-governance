@@ -43,9 +43,11 @@ secure origin, and `localhost` counts as one). Sign in as `luca` / `luca`. Keycl
 | LiteLLM gateway | http://localhost:4000 | a Keycloak token, or the master key for admin |
 | demo-crm API | http://localhost:8081/docs | a Keycloak token |
 
-Without `ANTHROPIC_API_KEY` the assistant runs a fixed plan instead of the model (*scripted mode*):
-every identity and permission flow is the same, only the note text is a template. With the key set
-in `.env`, it writes the note with the model through LiteLLM.
+Without a model the assistant runs a fixed plan (*scripted mode*): every identity and permission
+flow is the same, only the note text is a template. To use a model, set in `.env` either
+`LLM_MODEL=gpt` and `OPENAI_API_KEY`, or `LLM_MODEL=claude-sonnet` and `ANTHROPIC_API_KEY`, then
+`docker compose up -d`. The key stays in LiteLLM; the assistant reaches the model only through the
+gateway, with the delegated token. The OpenAI model is set in `litellm/config.yaml` (`gpt-4.1-mini`).
 
 To start again from nothing: `docker compose down -v`.
 
@@ -109,6 +111,6 @@ Synthetic users (dev only, password = username):
 - **The correlation id reaches demo-crm** through `extra_headers` on the MCP server in LiteLLM: no
   need for the report's fallback of passing it as a tool argument.
 - **A `demo-mock` model** answers with a fixed text, so the checks run without a model API key.
-  The real model (`claude-sonnet`) needs `ANTHROPIC_API_KEY` from step 2.
+  A real model needs `LLM_MODEL` plus its key (see *Run it*).
 - **Test clients `demo-cli` and `other-app`** allow the password grant so the checks can get tokens.
   Dev only: they don't exist outside this POC.

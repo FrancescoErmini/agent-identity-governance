@@ -44,12 +44,12 @@ class AgentIdentity:
                 "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"}
 
     async def _token(self, form: dict) -> str:
-        for attempt in range(3):          # right after a restart Keycloak may still hold the old address
+        for attempt in range(5):          # after an agent restart Keycloak may still hold its old address
             async with httpx.AsyncClient(timeout=15) as client:
                 r = await client.post(TOKEN_URL, data={**form, **self._assertion()})
-            if r.status_code == 200 or r.status_code != 401 or attempt == 2:
+            if r.status_code == 200 or "invalid_client" not in r.text or attempt == 4:
                 break
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
         if r.status_code != 200:
             raise PermissionError(f"Keycloak refused ({r.status_code}): {r.text[:300]}")
         return r.json()["access_token"]
@@ -107,13 +107,14 @@ async def call_tool(session: ClientSession, name: str, args: dict) -> dict:
     return {"tool": name, "args": args, "result": payload}
 
 
-async def chat(token: str, correlation_id: str, messages: list, tools: list | None = None) -> dict:
+async def chat(token: str, correlation_id: str, model: str, messages: list, tools: list | None = None) -> dict:
     """Model call through the gateway with the same token."""
-    body = {"model": os.environ.get("MODEL", "claude-sonnet"), "messages": messages, "max_tokens": 800}
+    body = {"model": model, "messages": messages, "max_tokens": 800}
     if tools:
         body["tools"] = tools
     async with httpx.AsyncClient(timeout=90) as client:
         r = await client.post(f"{GATEWAY}/v1/chat/completions", json=body,
                               headers={"Authorization": f"Bearer {token}", "x-correlation-id": correlation_id})
-    r.raise_for_status()
+    if r.status_code != 200:
+        raise RuntimeError(f"model call refused or failed at the gateway ({r.status_code}): {r.text[:300]}")
     return r.json()["choices"][0]["message"]

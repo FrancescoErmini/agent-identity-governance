@@ -1,7 +1,11 @@
 # LiteLLM open source. Admission by Keycloak token through the custom_auth hook in
 # keycloak_auth.py. With the Enterprise trial, switch to enable_jwt_auth (see README).
 model_list:
-  - model_name: claude-sonnet
+  - model_name: gpt                            # OpenAI: set OPENAI_API_KEY in .env and LLM_MODEL=gpt
+    litellm_params:
+      model: openai/gpt-4.1-mini               # change to any chat model your key can use
+      api_key: os.environ/OPENAI_API_KEY
+  - model_name: claude-sonnet                  # Anthropic: set ANTHROPIC_API_KEY and LLM_MODEL=claude-sonnet
     litellm_params:
       model: anthropic/claude-sonnet-5-5
       api_key: os.environ/ANTHROPIC_API_KEY

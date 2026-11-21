@@ -49,6 +49,7 @@ services:
       REDIS_PORT: "6379"
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set it in .env}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-not-set}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-not-set}
       STORE_MODEL_IN_DB: "False"
       LITELLM_LOCAL_MODEL_COST_MAP: "True"         # no fetch from GitHub at start-up
       OIDC_ISSUER: *kc_issuer
@@ -100,7 +101,7 @@ services:
     build: { context: ./agents, dockerfile: crm-assistant/Dockerfile }
     environment:
       OIDC_ISSUER: *kc_issuer
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}    # only to choose model mode; the key itself stays in LiteLLM
+      LLM_MODEL: ${LLM_MODEL:-}                    # gpt, claude-sonnet, or empty for scripted mode; keys stay in LiteLLM
     ports: ["8082:8000"]
     networks: [demo]
     depends_on: [litellm-setup, demo-crm-mcp]
