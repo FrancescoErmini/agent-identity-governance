@@ -11,6 +11,9 @@ REPS = {"NORTH": "luca", "CENTRE": "giulia", "SOUTH": "marco"}
 SPECIALTIES = ["cardiology", "nephrology", "general practice"]
 PRODUCTS = ["Cardiox", "Renalis", "Glucomed", "Pressil"]
 OUTCOMES = ["interested", "neutral", "follow-up needed", "not interested"]
+NEXT_STEPS = ["Send the new clinical study", "Book a follow-up in 4 weeks", "Invite to the regional congress",
+              "Leave samples at the next visit", "Introduce the medical science liaison",
+              "Share patient leaflets", "Check stock at the local pharmacy"]
 
 
 def seed() -> None:
@@ -39,7 +42,7 @@ def seed() -> None:
                 f"VIS-{i:05d}", acc[0], acc[5], start + timedelta(days=rnd.randrange(300)),
                 None if incomplete else rnd.choice(OUTCOMES),
                 ", ".join(rnd.sample(PRODUCTS, 2)),
-                None if incomplete else fake.sentence(nb_words=6),
+                None if incomplete else rnd.choice(NEXT_STEPS),
             ))
         c.cursor().executemany("INSERT INTO visits VALUES (%s, %s, %s, %s, %s, %s, %s)", visits)
 

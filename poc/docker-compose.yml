@@ -28,10 +28,10 @@ services:
       retries: 60
 
   keycloak-config:                                 # one-shot: settings the realm import can't hold
-    image: keycloak/keycloak:26.8@sha256:7e66a96e4739239070aeaf72e4c5decf0f7f682cfc725b9f7ea2b336eaba38b3
-    entrypoint: ["/bin/bash", "/config/configure.sh"]
+    image: python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+    command: ["python", "-u", "/config/configure.py"]
     environment: { KC_ADMIN_PASSWORD: "${KC_ADMIN_PASSWORD}" }
-    volumes: ["./keycloak/configure.sh:/config/configure.sh:ro"]
+    volumes: ["./keycloak/configure.py:/config/configure.py:ro"]
     networks: [demo]
     depends_on: { keycloak: { condition: service_healthy } }
     restart: "no"
@@ -85,6 +85,34 @@ services:
       pg-crm: { condition: service_healthy }
       keycloak-config: { condition: service_completed_successfully }
 
+  demo-crm-ui:                                     # where every flow ends: http://localhost:3000
+    build: ./demo-crm/ui
+    ports: ["3000:3000"]
+    networks: [demo]
+    depends_on: [demo-crm-api, crm-assistant, agent-dq]
+
+  demo-crm-mcp:
+    build: ./mcp-servers/demo-crm
+    networks: [demo]
+    depends_on: [demo-crm-api]
+
+  crm-assistant:                                   # delegated agent
+    build: { context: ./agents, dockerfile: crm-assistant/Dockerfile }
+    environment:
+      OIDC_ISSUER: *kc_issuer
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}    # only to choose model mode; the key itself stays in LiteLLM
+    ports: ["8082:8000"]
+    networks: [demo]
+    depends_on: [litellm-setup, demo-crm-mcp]
+
+  agent-dq:                                        # autonomous agent
+    build: { context: ./agents, dockerfile: dq/Dockerfile }
+    environment:
+      OIDC_ISSUER: *kc_issuer
+    ports: ["8083:8000"]
+    networks: [demo]
+    depends_on: [litellm-setup, demo-crm-mcp]
+
   pg-keycloak:
     image: postgres:16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f
     environment: { POSTGRES_DB: keycloak, POSTGRES_USER: keycloak, POSTGRES_PASSWORD: "${KC_DB_PASSWORD}" }
@@ -107,7 +135,7 @@ services:
   check:                                           # scripted checks: docker compose run --rm check
     image: python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
     profiles: [check]
-    command: ["python", "-u", "/tests/step1_check.py"]
+    command: ["sh", "-c", "python -u /tests/step1_check.py && python -u /tests/step2_check.py"]
     volumes: ["./tests:/tests:ro"]
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}

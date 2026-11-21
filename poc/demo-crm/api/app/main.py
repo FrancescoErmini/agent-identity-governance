@@ -91,3 +91,58 @@ def team_report(who: dict = Depends(caller)):
             "SELECT rep, count(*) AS visits, count(*) FILTER (WHERE outcome IS NULL) AS incomplete "
             "FROM visits GROUP BY rep ORDER BY rep"
         ).fetchall()
+
+
+@app.post("/notes/{note_id}/confirm")
+def confirm_note(note_id: int, who: dict = Depends(caller)):
+    require_role(who, "rep")
+    if who["agent"]:
+        raise HTTPException(403, "only the rep confirms a note, never an agent")
+    with conn() as c:
+        note = c.execute("UPDATE notes SET status = 'final' WHERE id = %s AND created_by = %s RETURNING *",
+                         (note_id, who["user"])).fetchone()
+    if not note:
+        raise HTTPException(404, "note not found")
+    return note
+
+
+# --- autonomous data-quality agent ------------------------------------------------------------
+@app.get("/dq/incomplete-visits")
+def incomplete_visits(limit: int = 20, who: dict = Depends(caller)):
+    require_role(who, "dq-agent")
+    with conn() as c:
+        return c.execute(
+            "SELECT v.*, a.name AS account_name FROM visits v JOIN accounts a ON a.id = v.account_id "
+            "WHERE (v.outcome IS NULL OR v.next_step IS NULL) "
+            "AND NOT EXISTS (SELECT 1 FROM reminders r WHERE r.visit_id = v.id) "
+            "ORDER BY v.visit_date DESC LIMIT %s", (min(limit, 100),)
+        ).fetchall()
+
+
+class ReminderIn(BaseModel):
+    visit_id: str
+    text: str = Field(min_length=1, max_length=1000)
+
+
+@app.post("/reminders", status_code=201)
+def create_reminder(body: ReminderIn, who: dict = Depends(caller)):
+    require_role(who, "dq-agent")
+    with conn() as c:
+        visit = c.execute("SELECT * FROM visits WHERE id = %s", (body.visit_id,)).fetchone()
+        if not visit:
+            raise HTTPException(404, "visit not found")
+        return c.execute(
+            "INSERT INTO reminders (visit_id, rep, text, created_by, via_agent, correlation_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING *",
+            (body.visit_id, visit["rep"], body.text, who["user"], who["agent"], who["correlation_id"]),
+        ).fetchone()
+
+
+@app.get("/reminders")
+def list_reminders(who: dict = Depends(caller)):
+    require_role(who, "rep")
+    with conn() as c:
+        return c.execute(
+            "SELECT r.*, a.name AS account_name FROM reminders r JOIN visits v ON v.id = r.visit_id "
+            "JOIN accounts a ON a.id = v.account_id WHERE r.rep = %s ORDER BY r.created_at DESC LIMIT 50",
+            (who["user"],)).fetchall()

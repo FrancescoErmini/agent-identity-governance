@@ -11,6 +11,13 @@ model_list:
       api_key: not-used
       mock_response: "ok"
 
+mcp_servers:
+  demo_crm:
+    url: "http://demo-crm-mcp:8000/mcp"
+    transport: "http"
+    auth_type: oauth_delegate      # LiteLLM admits the caller, forwards the caller's bearer upstream
+    extra_headers: ["x-correlation-id"]   # one id from the request in the UI to the record in demo-crm
+
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
