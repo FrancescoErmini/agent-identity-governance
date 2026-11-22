@@ -9,7 +9,7 @@ It is built in steps. Each step ends with a check script that passes from a clea
 | --- | --- | --- |
 | **1 · Stack and identity** ✓ | Keycloak realm, LiteLLM gateway that verifies Keycloak tokens, demo-crm API with synthetic data | `tests/step1_check.py`: 21 checks |
 | **2 · Agents** ✓ | MCP server, UI with “via agent” badges, `agent-dq`, `crm-assistant` with token exchange | `tests/step2_check.py`: acts 1–4, 16 checks |
-| 3 · Controls | Tool permissions, “draft only” guardrail, direct-call test, kill switch | All seven acts |
+| **3 · Controls** ✓ | “Draft only” guardrail at the gateway, direct-call test, kill switch | `tests/demo_check.py`: the seven acts, 13 checks |
 | 4 · Demo pack | Demo script, evidence | — |
 
 ## Run it
@@ -23,7 +23,8 @@ docker compose up -d --build      # about 1 minute the first time
 docker compose --profile check run --rm check
 ```
 
-The last command should end with `21/21 checks passed` and `16/16 checks passed`.
+The last command should end with `21/21 checks passed`, `16/16 checks passed` and
+`Demo: 13/13 checks passed`.
 
 To use the UI, add this line to `/etc/hosts` once (`sudo nano /etc/hosts` on a Mac). Tokens are
 issued for `sso.demo.local`, so the name must match inside and outside Docker:
@@ -58,7 +59,7 @@ To start again from nothing: `docker compose down -v`.
 | --- | --- |
 | `keycloak` | Realm `ai-demo` (imported from `keycloak/realm-ai-demo.json`), synthetic users, client roles `rep` and `area-manager` |
 | `keycloak-config` | One-shot `keycloak/configure.py`: agent scopes, agent clients, delegation permission |
-| `litellm` | Gateway. Verifies the Keycloak token, admits a client only if it has a LiteLLM team, logs every call with the person's `sub` and the client's team |
+| `litellm` | Gateway. Verifies the Keycloak token, admits a client only if it has a LiteLLM team, applies each team's tool list and the “draft only” guardrail, logs every call with the person's `sub` and the client's team |
 | `litellm-setup` | One-shot: one LiteLLM team per Keycloak client |
 | `demo-crm-api` | The target app. Trusts only Keycloak, applies its own roles, records `created_by`, `via_agent` and the correlation id |
 | `demo-crm-ui` | Where every flow ends: accounts, assistant, notes with “via agent” badges, reminders |
@@ -74,6 +75,21 @@ Synthetic users (dev only, password = username):
 | `luca` | NORTH | rep, area-manager |
 | `giulia` | CENTRE | rep |
 | `marco` | SOUTH | rep |
+
+## The seven acts
+
+`tests/demo_check.py` runs them in order. In the UI, acts 1–6 are buttons on an account; act 7 is
+run by the operator.
+
+| # | What happens | Where it is stopped or recorded |
+| --- | --- | --- |
+| 1 | Luca signs in and sees only NORTH accounts | demo-crm reads roles and territory from the token |
+| 2 | “Prepare visit and draft a note”: the draft shows *proposed by agent-crm-assistant for luca*; Luca confirms it | demo-crm records `created_by` and `via_agent` |
+| 3 | “Team report” through the assistant | demo-crm: 403, the delegated token has only `rep` |
+| 4 | “Run agent-dq now” (stands in for the scheduler): reminders tagged *agent-dq (autonomous)* | agent-dq's own token, role `dq-agent` |
+| 5 | “Try a tool it doesn't have”, then “try a final note” | LiteLLM: tool not on the team's list; guardrail `agents-draft-only` |
+| 6 | “Bypass the gateway”: the final note sent straight to demo-crm | demo-crm stores it as a draft anyway |
+| 7 | `./scripts/kill-switch.sh block`, then any assistant button; `unblock` to restore | LiteLLM refuses the blocked team; the log shows `sub` and agent for every call |
 
 ## How the agents prove who they are
 
@@ -110,6 +126,13 @@ Synthetic users (dev only, password = username):
   demo-crm until this was turned off. The production realms need the same setting.
 - **Seven MCP tools, not six.** `get_team_report` is on the assistant's list so that act 3 reaches
   demo-crm and is refused there (the token carries only `rep`), as the report describes.
+- **The “draft only” rule is a small custom guardrail** (`litellm/draft_only_guardrail.py`, open
+  source) on LiteLLM's `pre_mcp_call` hook. LiteLLM's built-in `tool_permission` guardrail checks the
+  tools in model requests, not direct MCP tool calls, so it would not stop act 5.
+- **The kill switch blocks the agent's LiteLLM team** (`scripts/kill-switch.sh`). It stops the agent's
+  model and tool calls at once. It does not stop a direct call to demo-crm (act 6 still reaches the
+  app, which keeps it as a draft): in production the apps must be reachable only through the gateway
+  and the MCP servers, or the agent's Keycloak client must be disabled too.
 - **The correlation id reaches demo-crm** through `extra_headers` on the MCP server in LiteLLM: no
   need for the report's fallback of passing it as a tool argument.
 - **A `demo-mock` model** answers with a fixed text, so the checks run without a model API key.

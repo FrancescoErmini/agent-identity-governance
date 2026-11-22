@@ -42,6 +42,7 @@ services:
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
       - ./litellm/keycloak_auth.py:/app/keycloak_auth.py:ro
+      - ./litellm/draft_only_guardrail.py:/app/draft_only_guardrail.py:ro
     ports: ["4000:4000"]
     environment:
       DATABASE_URL: postgresql://litellm:${LITELLM_DB_PASSWORD}@pg-litellm/litellm
@@ -136,7 +137,7 @@ services:
   check:                                           # scripted checks: docker compose run --rm check
     image: python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
     profiles: [check]
-    command: ["sh", "-c", "python -u /tests/step1_check.py && python -u /tests/step2_check.py"]
+    command: ["sh", "-c", "python -u /tests/step1_check.py && python -u /tests/step2_check.py && python -u /tests/demo_check.py"]
     volumes: ["./tests:/tests:ro"]
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
