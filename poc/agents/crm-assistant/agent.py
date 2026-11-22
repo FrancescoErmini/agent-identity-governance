@@ -68,6 +68,8 @@ async def assist(ask: Ask, authorization: str = Header(...)):
         "correlation_id": correlation_id,
         "acting_for": c.get("preferred_username"), "sub": c.get("sub"), "act": c.get("act"),
         "roles_in_delegated_token": c.get("resource_access", {}).get("demo-crm", {}).get("roles", []),
+        "delegated_token_claims": {k: c.get(k) for k in ("iss", "sub", "azp", "aud", "act", "scope", "resource_access",
+                                                         "territory", "preferred_username", "exp")},
         "mode": f"model {MODEL}" if USE_MODEL else "scripted",
         "steps": steps, "answer": answer,
     }

@@ -1,0 +1,648 @@
+{
+  "Act 1 \u00b7 Luca logs in to demo-crm through Keycloak and sees only his territory": {
+    "checks": [
+      {
+        "check": "roles and territory in the JWT drive the app (NORTH only)",
+        "passed": true
+      },
+      {
+        "check": "Luca consented: may_act names agent-crm-assistant",
+        "passed": true
+      }
+    ],
+    "responses": [
+      {
+        "what": "luca's access token after login with consent (claims)",
+        "payload": {
+          "iss": "http://sso.demo.local:8080/realms/ai-demo",
+          "sub": "830b713f-0803-4565-8fdb-971500b453b6",
+          "azp": "demo-crm",
+          "aud": [
+            "agent-crm-assistant",
+            "demo-crm"
+          ],
+          "scope": "openid delegation:client:agent-crm-assistant profile email",
+          "may_act": {
+            "sub": "042bbb1a-2c66-4bbb-a400-c9a8521d2b92",
+            "client_id": "agent-crm-assistant"
+          },
+          "resource_access": {
+            "demo-crm": {
+              "roles": [
+                "area-manager",
+                "rep"
+              ]
+            }
+          },
+          "territory": "NORTH",
+          "preferred_username": "luca"
+        }
+      }
+    ]
+  },
+  "Act 2 \u00b7 The assistant drafts a visit note for Luca; it waits for his confirmation": {
+    "checks": [
+      {
+        "check": "note stored as draft, created_by luca, via_agent agent-crm-assistant",
+        "passed": true
+      },
+      {
+        "check": "Luca confirms it himself: the note becomes final",
+        "passed": true
+      }
+    ],
+    "responses": [
+      {
+        "what": "crm-assistant /assist task=summary -> HTTP 200",
+        "payload": {
+          "correlation_id": "corr-838d592adc9c",
+          "acting_for": "luca",
+          "sub": "830b713f-0803-4565-8fdb-971500b453b6",
+          "act": {
+            "sub": "042bbb1a-2c66-4bbb-a400-c9a8521d2b92",
+            "client_id": "agent-crm-assistant"
+          },
+          "roles_in_delegated_token": [
+            "rep"
+          ],
+          "delegated_token_claims": {
+            "iss": "http://sso.demo.local:8080/realms/ai-demo",
+            "sub": "830b713f-0803-4565-8fdb-971500b453b6",
+            "azp": "agent-crm-assistant",
+            "aud": [
+              "litellm-proxy",
+              "demo-crm"
+            ],
+            "act": {
+              "sub": "042bbb1a-2c66-4bbb-a400-c9a8521d2b92",
+              "client_id": "agent-crm-assistant"
+            },
+            "scope": "crm:ai profile email",
+            "resource_access": {
+              "demo-crm": {
+                "roles": [
+                  "rep"
+                ]
+              }
+            },
+            "territory": "NORTH",
+            "preferred_username": "luca",
+            "exp": 1795338526
+          },
+          "mode": "scripted",
+          "steps": [
+            {
+              "tool": "get_account_summary",
+              "args": {
+                "account_id": "ACC-00000"
+              },
+              "result": {
+                "id": "ACC-00000",
+                "name": "Dr. Caracciolo",
+                "specialty": "general practice",
+                "city": "San Giorgio A Liri",
+                "territory": "NORTH",
+                "owner": "luca",
+                "visits": [
+                  {
+                    "id": "VIS-00414",
+                    "account_id": "ACC-00000",
+                    "rep": "luca",
+                    "visit_date": "2026-08-08",
+                    "outcome": "neutral",
+                    "products": "Renalis, Glucomed",
+                    "next_step": "Invite to the regional congress"
+                  },
+                  {
+                    "id": "VIS-00927",
+                    "account_id": "ACC-00000",
+                    "rep": "luca",
+                    "visit_date": "2026-07-19",
+                    "outcome": "follow-up needed",
+                    "products": "Renalis, Glucomed",
+                    "next_step": "Invite to the regional congress"
+                  },
+                  {
+                    "id": "VIS-00683",
+                    "account_id": "ACC-00000",
+                    "rep": "luca",
+                    "visit_date": "2026-02-14",
+                    "outcome": "follow-up needed",
+                    "products": "Pressil, Renalis",
+                    "next_step": "Share patient leaflets"
+                  },
+                  {
+                    "id": "VIS-00974",
+                    "account_id": "ACC-00000",
+                    "rep": "luca",
+                    "visit_date": "2026-02-06",
+                    "outcome": "not interested",
+                    "products": "Glucomed, Pressil",
+                    "next_step": "Send the new clinical study"
+                  }
+                ]
+              }
+            },
+            {
+              "tool": "draft_visit_note",
+              "args": {
+                "account_id": "ACC-00000",
+                "text": "Visit summary for Dr. Caracciolo (general practice, San Giorgio A Liri): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress."
+              },
+              "result": {
+                "id": 4,
+                "account_id": "ACC-00000",
+                "text": "Visit summary for Dr. Caracciolo (general practice, San Giorgio A Liri): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress.",
+                "status": "draft",
+                "created_by": "luca",
+                "via_agent": "agent-crm-assistant",
+                "correlation_id": "corr-838d592adc9c",
+                "created_at": "2026-11-22T09:03:47.677060+00:00"
+              }
+            }
+          ],
+          "answer": "Visit summary for Dr. Caracciolo (general practice, San Giorgio A Liri): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress."
+        }
+      }
+    ]
+  },
+  "Act 3 \u00b7 Luca, also area manager, asks for the team report; the app refuses the assistant": {
+    "checks": [
+      {
+        "check": "demo-crm refuses: the delegated token carries only rep",
+        "passed": true
+      }
+    ],
+    "responses": [
+      {
+        "what": "crm-assistant /assist task=team_report -> HTTP 200",
+        "payload": {
+          "correlation_id": "corr-eaf64ba46211",
+          "acting_for": "luca",
+          "sub": "830b713f-0803-4565-8fdb-971500b453b6",
+          "act": {
+            "sub": "042bbb1a-2c66-4bbb-a400-c9a8521d2b92",
+            "client_id": "agent-crm-assistant"
+          },
+          "roles_in_delegated_token": [
+            "rep"
+          ],
+          "delegated_token_claims": {
+            "iss": "http://sso.demo.local:8080/realms/ai-demo",
+            "sub": "830b713f-0803-4565-8fdb-971500b453b6",
+            "azp": "agent-crm-assistant",
+            "aud": [
+              "litellm-proxy",
+              "demo-crm"
+            ],
+            "act": {
+              "sub": "042bbb1a-2c66-4bbb-a400-c9a8521d2b92",
+              "client_id": "agent-crm-assistant"
+            },
+            "scope": "crm:ai profile email",
+            "resource_access": {
+              "demo-crm": {
+                "roles": [
+                  "rep"
+                ]
+              }
+            },
+            "territory": "NORTH",
+            "preferred_username": "luca",
+            "exp": 1795338526
+          },
+          "mode": "scripted",
+          "steps": [
+            {
+              "tool": "get_team_report",
+              "args": {},
+              "refused_by": "demo-crm",
+              "error": {
+                "error": 403,
+                "detail": "role area-manager required"
+              }
+            }
+          ],
+          "answer": ""
+        }
+      }
+    ]
+  },
+  "Act 4 \u00b7 The scheduler starts agent-dq; reminders appear tagged as autonomous": {
+    "checks": [
+      {
+        "check": "reminders created by agent-dq with its own identity",
+        "passed": true
+      }
+    ],
+    "responses": [
+      {
+        "what": "agent-dq /run -> HTTP 200",
+        "payload": {
+          "correlation_id": "corr-a15ac9a32c06",
+          "acting_as": "agent-dq",
+          "sub": "19caa9a7-8391-4cc0-a0a8-dc812972bb25",
+          "roles": [
+            "dq-agent"
+          ],
+          "steps": [
+            {
+              "tool": "list_incomplete_visits",
+              "args": {
+                "limit": 2
+              },
+              "result": {
+                "items": [
+                  {
+                    "id": "VIS-00440",
+                    "account_id": "ACC-00268",
+                    "rep": "giulia",
+                    "visit_date": "2026-10-23",
+                    "outcome": null,
+                    "products": "Cardiox, Renalis",
+                    "next_step": null,
+                    "account_name": "Dr. Guinizzelli"
+                  },
+                  {
+                    "id": "VIS-01314",
+                    "account_id": "ACC-00243",
+                    "rep": "luca",
+                    "visit_date": "2026-10-22",
+                    "outcome": null,
+                    "products": "Glucomed, Pressil",
+                    "next_step": null,
+                    "account_name": "Dr. Mezzetta"
+                  }
+                ]
+              }
+            },
+            {
+              "tool": "create_reminder",
+              "args": {
+                "visit_id": "VIS-00440",
+                "text": "Please complete outcome, next_step for your visit to Dr. Guinizzelli on 2026-10-23."
+              },
+              "result": {
+                "id": 3,
+                "visit_id": "VIS-00440",
+                "rep": "giulia",
+                "text": "Please complete outcome, next_step for your visit to Dr. Guinizzelli on 2026-10-23.",
+                "created_by": "service-account-agent-dq",
+                "via_agent": "agent-dq",
+                "correlation_id": "corr-a15ac9a32c06",
+                "created_at": "2026-11-22T09:03:48.619954+00:00"
+              }
+            },
+            {
+              "tool": "create_reminder",
+              "args": {
+                "visit_id": "VIS-01314",
+                "text": "Please complete outcome, next_step for your visit to Dr. Mezzetta on 2026-10-22."
+              },
+              "result": {
+                "id": 4,
+                "visit_id": "VIS-01314",
+                "rep": "luca",
+                "text": "Please complete outcome, next_step for your visit to Dr. Mezzetta on 2026-10-22.",
+                "created_by": "service-account-agent-dq",
+                "via_agent": "agent-dq",
+                "correlation_id": "corr-a15ac9a32c06",
+                "created_at": "2026-11-22T09:03:48.785571+00:00"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "Act 5 \u00b7 The assistant tries a tool outside its list, then a final note; LiteLLM refuses both": {
+    "checks": [
+      {
+        "check": "create_reminder refused by the gateway (not on the assistant's list)",
+        "passed": true
+      },
+      {
+        "check": "draft_visit_note with status final refused by the gateway guardrail",
+        "passed": true
+      }
+    ],
+    "responses": [
+      {
+        "what": "crm-assistant /assist task=forbidden_tool -> HTTP 200",
+        "payload": {
+          "correlation_id": "corr-d09cb0f2d39e",
+          "acting_for": "luca",
+          "sub": "830b713f-0803-4565-8fdb-971500b453b6",
+          "act": {
+            "sub": "042bbb1a-2c66-4bbb-a400-c9a8521d2b92",
+            "client_id": "agent-crm-assistant"
+          },
+          "roles_in_delegated_token": [
+            "rep"
+          ],
+          "delegated_token_claims": {
+            "iss": "http://sso.demo.local:8080/realms/ai-demo",
+            "sub": "830b713f-0803-4565-8fdb-971500b453b6",
+            "azp": "agent-crm-assistant",
+            "aud": [
+              "litellm-proxy",
+              "demo-crm"
+            ],
+            "act": {
+              "sub": "042bbb1a-2c66-4bbb-a400-c9a8521d2b92",
+              "client_id": "agent-crm-assistant"
+            },
+            "scope": "crm:ai profile email",
+            "resource_access": {
+              "demo-crm": {
+                "roles": [
+                  "rep"
+                ]
+              }
+            },
+            "territory": "NORTH",
+            "preferred_username": "luca",
+            "exp": 1795338526
+          },
+          "mode": "scripted",
+          "steps": [
+            {
+              "tool": "create_reminder",
+              "args": {
+                "visit_id": "VIS-00000",
+                "text": "sent by the assistant"
+              },
+              "refused_by": "gateway",
+              "error": "Error: Tool 'create_reminder' is not allowed for your key/team on server 'demo_crm'. Contact proxy admin for access."
+            }
+          ],
+          "answer": ""
+        }
+      },
+      {
+        "what": "crm-assistant /assist task=final_note -> HTTP 200",
+        "payload": {
+          "correlation_id": "corr-022395675c83",
+          "acting_for": "luca",
+          "sub": "830b713f-0803-4565-8fdb-971500b453b6",
+          "act": {
+            "sub": "042bbb1a-2c66-4bbb-a400-c9a8521d2b92",
+            "client_id": "agent-crm-assistant"
+          },
+          "roles_in_delegated_token": [
+            "rep"
+          ],
+          "delegated_token_claims": {
+            "iss": "http://sso.demo.local:8080/realms/ai-demo",
+            "sub": "830b713f-0803-4565-8fdb-971500b453b6",
+            "azp": "agent-crm-assistant",
+            "aud": [
+              "litellm-proxy",
+              "demo-crm"
+            ],
+            "act": {
+              "sub": "042bbb1a-2c66-4bbb-a400-c9a8521d2b92",
+              "client_id": "agent-crm-assistant"
+            },
+            "scope": "crm:ai profile email",
+            "resource_access": {
+              "demo-crm": {
+                "roles": [
+                  "rep"
+                ]
+              }
+            },
+            "territory": "NORTH",
+            "preferred_username": "luca",
+            "exp": 1795338526
+          },
+          "mode": "scripted",
+          "steps": [
+            {
+              "tool": "draft_visit_note",
+              "args": {
+                "account_id": "ACC-00000",
+                "text": "Final note written by the assistant",
+                "status": "final"
+              },
+              "refused_by": "gateway",
+              "error": "Error: Violated guardrail policy"
+            }
+          ],
+          "answer": ""
+        }
+      }
+    ]
+  },
+  "Act 6 \u00b7 The same final note sent straight to the API, bypassing the gateway": {
+    "checks": [
+      {
+        "check": "demo-crm stores it only as a draft: two independent layers",
+        "passed": true
+      }
+    ],
+    "responses": [
+      {
+        "what": "crm-assistant /assist task=bypass_gateway -> HTTP 200",
+        "payload": {
+          "correlation_id": "corr-901596276518",
+          "acting_for": "luca",
+          "sub": "830b713f-0803-4565-8fdb-971500b453b6",
+          "act": {
+            "sub": "042bbb1a-2c66-4bbb-a400-c9a8521d2b92",
+            "client_id": "agent-crm-assistant"
+          },
+          "roles_in_delegated_token": [
+            "rep"
+          ],
+          "delegated_token_claims": {
+            "iss": "http://sso.demo.local:8080/realms/ai-demo",
+            "sub": "830b713f-0803-4565-8fdb-971500b453b6",
+            "azp": "agent-crm-assistant",
+            "aud": [
+              "litellm-proxy",
+              "demo-crm"
+            ],
+            "act": {
+              "sub": "042bbb1a-2c66-4bbb-a400-c9a8521d2b92",
+              "client_id": "agent-crm-assistant"
+            },
+            "scope": "crm:ai profile email",
+            "resource_access": {
+              "demo-crm": {
+                "roles": [
+                  "rep"
+                ]
+              }
+            },
+            "territory": "NORTH",
+            "preferred_username": "luca",
+            "exp": 1795338526
+          },
+          "mode": "scripted",
+          "steps": [
+            {
+              "tool": "POST /notes (direct)",
+              "args": {
+                "account_id": "ACC-00000",
+                "text": "Final note sent straight to the API",
+                "status": "final"
+              },
+              "result": {
+                "id": 5,
+                "account_id": "ACC-00000",
+                "text": "Final note sent straight to the API",
+                "status": "draft",
+                "created_by": "luca",
+                "via_agent": "agent-crm-assistant",
+                "correlation_id": "corr-901596276518",
+                "created_at": "2026-11-22T09:03:49.517939+00:00"
+              }
+            }
+          ],
+          "answer": ""
+        }
+      }
+    ]
+  },
+  "Act 7 \u00b7 The assistant is blocked in LiteLLM; its next call fails. The log shows sub and agent": {
+    "checks": [
+      {
+        "check": "kill switch: team agent-crm-assistant blocked",
+        "passed": true
+      },
+      {
+        "check": "the assistant's next call is refused at the gateway",
+        "passed": true
+      },
+      {
+        "check": "after unblocking, it works again",
+        "passed": true
+      },
+      {
+        "check": "every tool call in the LiteLLM log carries luca's sub and the agent's team",
+        "passed": true
+      }
+    ],
+    "responses": [
+      {
+        "what": "crm-assistant /assist task=summary -> HTTP 403",
+        "payload": {
+          "detail": "gateway refused agent-crm-assistant (401): the agent is blocked or not admitted at LiteLLM"
+        }
+      },
+      {
+        "what": "crm-assistant /assist task=summary -> HTTP 200",
+        "payload": {
+          "correlation_id": "corr-c7fad944a1f4",
+          "acting_for": "luca",
+          "sub": "830b713f-0803-4565-8fdb-971500b453b6",
+          "act": {
+            "sub": "042bbb1a-2c66-4bbb-a400-c9a8521d2b92",
+            "client_id": "agent-crm-assistant"
+          },
+          "roles_in_delegated_token": [
+            "rep"
+          ],
+          "delegated_token_claims": {
+            "iss": "http://sso.demo.local:8080/realms/ai-demo",
+            "sub": "830b713f-0803-4565-8fdb-971500b453b6",
+            "azp": "agent-crm-assistant",
+            "aud": [
+              "litellm-proxy",
+              "demo-crm"
+            ],
+            "act": {
+              "sub": "042bbb1a-2c66-4bbb-a400-c9a8521d2b92",
+              "client_id": "agent-crm-assistant"
+            },
+            "scope": "crm:ai profile email",
+            "resource_access": {
+              "demo-crm": {
+                "roles": [
+                  "rep"
+                ]
+              }
+            },
+            "territory": "NORTH",
+            "preferred_username": "luca",
+            "exp": 1795338526
+          },
+          "mode": "scripted",
+          "steps": [
+            {
+              "tool": "get_account_summary",
+              "args": {
+                "account_id": "ACC-00000"
+              },
+              "result": {
+                "id": "ACC-00000",
+                "name": "Dr. Caracciolo",
+                "specialty": "general practice",
+                "city": "San Giorgio A Liri",
+                "territory": "NORTH",
+                "owner": "luca",
+                "visits": [
+                  {
+                    "id": "VIS-00414",
+                    "account_id": "ACC-00000",
+                    "rep": "luca",
+                    "visit_date": "2026-08-08",
+                    "outcome": "neutral",
+                    "products": "Renalis, Glucomed",
+                    "next_step": "Invite to the regional congress"
+                  },
+                  {
+                    "id": "VIS-00927",
+                    "account_id": "ACC-00000",
+                    "rep": "luca",
+                    "visit_date": "2026-07-19",
+                    "outcome": "follow-up needed",
+                    "products": "Renalis, Glucomed",
+                    "next_step": "Invite to the regional congress"
+                  },
+                  {
+                    "id": "VIS-00683",
+                    "account_id": "ACC-00000",
+                    "rep": "luca",
+                    "visit_date": "2026-02-14",
+                    "outcome": "follow-up needed",
+                    "products": "Pressil, Renalis",
+                    "next_step": "Share patient leaflets"
+                  },
+                  {
+                    "id": "VIS-00974",
+                    "account_id": "ACC-00000",
+                    "rep": "luca",
+                    "visit_date": "2026-02-06",
+                    "outcome": "not interested",
+                    "products": "Glucomed, Pressil",
+                    "next_step": "Send the new clinical study"
+                  }
+                ]
+              }
+            },
+            {
+              "tool": "draft_visit_note",
+              "args": {
+                "account_id": "ACC-00000",
+                "text": "Visit summary for Dr. Caracciolo (general practice, San Giorgio A Liri): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress."
+              },
+              "result": {
+                "id": 6,
+                "account_id": "ACC-00000",
+                "text": "Visit summary for Dr. Caracciolo (general practice, San Giorgio A Liri): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress.",
+                "status": "draft",
+                "created_by": "luca",
+                "via_agent": "agent-crm-assistant",
+                "correlation_id": "corr-c7fad944a1f4",
+                "created_at": "2026-11-22T09:03:50.161571+00:00"
+              }
+            }
+          ],
+          "answer": "Visit summary for Dr. Caracciolo (general practice, San Giorgio A Liri): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress."
+        }
+      }
+    ]
+  }
+}
