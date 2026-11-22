@@ -10,7 +10,7 @@ It is built in steps. Each step ends with a check script that passes from a clea
 | **1 · Stack and identity** ✓ | Keycloak realm, LiteLLM gateway that verifies Keycloak tokens, demo-crm API with synthetic data | `tests/step1_check.py`: 21 checks |
 | **2 · Agents** ✓ | MCP server, UI with “via agent” badges, `agent-dq`, `crm-assistant` with token exchange | `tests/step2_check.py`: acts 1–4, 16 checks |
 | **3 · Controls** ✓ | “Draft only” guardrail at the gateway, direct-call test, kill switch | `tests/demo_check.py`: the seven acts, 13 checks |
-| 4 · Demo pack | Demo script, evidence | — |
+| **4 · Demo pack** ✓ | [Demo script](DEMO.md) (Italian), evidence of every act | `evidence/sample-2026-11-22/` |
 
 ## Run it
 
@@ -52,6 +52,19 @@ flow is the same, only the note text is a template. To use a model, set in `.env
 gateway, with the delegated token. The OpenAI model is set in `litellm/config.yaml` (`gpt-4.1-mini`).
 
 To start again from nothing: `docker compose down -v`.
+
+## Demo and evidence
+
+The demo script, act by act, is in [DEMO.md](DEMO.md) (Italian). To record evidence of a run:
+
+```bash
+docker compose --profile check run --rm evidence              # runs the seven acts, writes evidence/run-<UTC time>/
+node scripts/capture-screens.js evidence/run-<UTC time>/screens   # optional: one UI screenshot per act (needs Playwright)
+```
+
+Each run folder holds `SUMMARY.md` (checks per act, LiteLLM log for Luca's `sub`), the assistant's responses
+(`acts.json`, with the delegated token's claims), the LiteLLM log and the demo-crm records. Run folders are
+git-ignored; [`evidence/sample-2026-11-22/`](evidence/sample-2026-11-22/) is a committed example.
 
 ## What is in it
 
