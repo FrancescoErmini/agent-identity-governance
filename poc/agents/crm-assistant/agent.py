@@ -12,6 +12,8 @@ from typing import Literal
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
+import httpx
+
 from agentkit import AgentIdentity, call_tool, chat, claims, tools_session
 
 app = FastAPI(title="crm-assistant")
@@ -31,7 +33,7 @@ def health():
 
 
 class Ask(BaseModel):
-    task: Literal["summary", "team_report", "forbidden_tool", "final_note", "chat"]
+    task: Literal["summary", "team_report", "forbidden_tool", "final_note", "bypass_gateway", "chat"]
     account_id: str | None = None
     message: str | None = None
 
@@ -46,14 +48,22 @@ async def assist(ask: Ask, authorization: str = Header(...)):
         raise HTTPException(403, f"delegation refused: {exc}") from exc
     c = claims(token)
 
+    steps: list[dict] = []
+    answer = ""
     try:
-        async with tools_session(await me.own_token(), token, correlation_id) as session:
-            steps, answer = await _run(ask, session, token, correlation_id)
-    except Exception as exc:                           # noqa: BLE001
-        model_error = _find(exc, RuntimeError)         # the MCP client wraps errors in exception groups
-        if model_error is None:
-            raise
-        raise HTTPException(502, str(model_error)) from exc
+        if ask.task == "bypass_gateway":               # act 6: no gateway, no MCP session
+            steps.append(await _direct_call(token, correlation_id, ask.account_id))
+        else:
+            async with tools_session(await me.own_token(), token, correlation_id) as session:
+                steps, answer = await _run(ask, session, token, correlation_id)
+    except BaseException as exc:                       # noqa: BLE001  the MCP client wraps errors in (base) groups
+        if (refused := _find(exc, httpx.HTTPStatusError)) is not None:
+            # the gateway turned the agent away before any tool ran (e.g. the kill switch)
+            raise HTTPException(403, f"gateway refused agent-crm-assistant ({refused.response.status_code}): "
+                                     "the agent is blocked or not admitted at LiteLLM") from None
+        if (model_error := _find(exc, RuntimeError)) is not None:
+            raise HTTPException(502, str(model_error)) from None
+        raise
     return {
         "correlation_id": correlation_id,
         "acting_for": c.get("preferred_username"), "sub": c.get("sub"), "act": c.get("act"),
@@ -139,3 +149,15 @@ def _find(exc: BaseException, kind: type) -> BaseException | None:
         if found := _find(inner, kind):
             return found
     return None
+
+
+async def _direct_call(token: str, correlation_id: str, account_id: str | None) -> dict:
+    """What a misbehaving agent could try: call demo-crm itself with its delegated token. No gateway
+    rule applies here, so only demo-crm's own rule stands: notes from an agent are stored as drafts."""
+    args = {"account_id": account_id, "text": "Final note sent straight to the API", "status": "final"}
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post(f"{os.environ.get('DEMO_CRM_API', 'http://demo-crm-api:8080')}/notes", json=args,
+                              headers={"Authorization": f"Bearer {token}", "x-correlation-id": correlation_id})
+    if r.status_code >= 400:
+        return {"tool": "POST /notes (direct)", "args": args, "refused_by": "demo-crm", "error": r.json()}
+    return {"tool": "POST /notes (direct)", "args": args, "result": r.json()}
