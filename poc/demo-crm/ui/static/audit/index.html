@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audit console</title>
+<link rel="stylesheet" href="/shared/style.css">
+</head>
+<body class="audit">
+<header class="app">
+  <div class="brand">Audit console <small>demo-crm · who did what, with which JWT</small></div>
+  <div id="who" class="who"></div>
+</header>
+
+<main id="login-view" class="center" hidden>
+  <h1>Audit console</h1>
+  <p class="muted">Sign in with your company account. For area managers.</p>
+  <button id="login" class="primary">Sign in</button>
+</main>
+
+<main id="app-view" class="audit-main" hidden>
+  <section class="card">
+    <div class="filters">
+      <select id="f-actor">
+        <option value="">Everyone</option>
+        <option value="person">People (by hand)</option>
+        <option value="person via agent">People through an agent</option>
+        <option value="autonomous agent">Autonomous agents</option>
+      </select>
+      <label class="small"><input type="checkbox" id="f-writes" checked> Changes and refusals</label>
+      <label class="small"><input type="checkbox" id="f-refused"> Refused only</label>
+      <button id="f-reload" class="small">Refresh</button>
+    </div>
+    <table id="audit-table">
+      <thead><tr><th>Time</th><th>Who</th><th>Action</th><th>Record</th><th>Outcome</th><th>From</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="small muted">Click a row: the JWT that reached the API, next to the JWTs LiteLLM checked for the same correlation id.</p>
+  </section>
+</main>
+
+<script>window.APP = { client: "crm-web", scope: "openid" };</script>
+<script src="/shared/oidc.js"></script>
+<script src="audit.js"></script>
+</body>
+</html>

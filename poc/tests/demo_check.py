@@ -67,7 +67,7 @@ def main():
         time.sleep(2)
     team("unblock", "agent-crm-assistant")                 # a previous run may have stopped half way
 
-    act("Act 1 · Luca logs in to demo-crm through Keycloak and sees only his territory")
+    act("Act 1 · Luca signs in to the AI assistant app: Keycloak asks his consent; he sees only his territory")
     luca = t.browser_login("luca", "openid delegation:client:agent-crm-assistant")
     c = t.claims(luca)
     keep("luca's access token after login with consent (claims)",
@@ -81,7 +81,10 @@ def main():
     check("Luca consented: may_act names agent-crm-assistant", (c.get("may_act") or {}).get("client_id") == "agent-crm-assistant")
 
     act("AS-IS · Luca writes a visit note by hand; the audit names Luca, no agent")
-    status, _, raw = t.http("POST", f"{UI}/api/notes", luca,
+    luca_crm = t.browser_login("luca", "openid", client="crm-web")       # the CRM: plain login, no AI consent
+    check("the CRM login asks no consent and grants no delegation (no may_act), roles from the token",
+          "may_act" not in t.claims(luca_crm) and t.claims(luca_crm).get("azp") == "crm-web", t.claims(luca_crm))
+    status, _, raw = t.http("POST", f"{UI}/api/notes", luca_crm,
                             {"account_id": account, "text": "Met the doctor, follow up in two weeks", "status": "final"})
     manual = t.j(raw)
     keep(f"POST /notes by hand through the UI -> HTTP {status}", manual)
@@ -90,9 +93,9 @@ def main():
     rows = audit(luca, writes_only="true", person="luca")
     row = next((r for r in rows if r.get("object") == f"note:{manual.get('id')} (final)"), {})
     keep("audit row for the manual note", row)
-    check("audit: luca by hand, from the demo-crm UI; JWT verified, azp demo-crm, no act",
+    check("audit: luca by hand, from the demo-crm UI; JWT verified, azp crm-web, no act",
           row.get("actor_type") == "person" and row.get("source") == "demo-crm UI" and row.get("token_verified")
-          and (row.get("token_claims") or {}).get("azp") == "demo-crm" and "act" not in (row.get("token_claims") or {}), row)
+          and (row.get("token_claims") or {}).get("azp") == "crm-web" and "act" not in (row.get("token_claims") or {}), row)
 
     act("Act 2 · The assistant drafts a visit note for Luca; it waits for his confirmation")
     status, out = assist(luca, "summary", account)

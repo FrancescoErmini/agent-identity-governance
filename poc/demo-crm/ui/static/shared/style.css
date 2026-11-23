@@ -32,6 +32,7 @@ th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line
 .pill { font-size: 11px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
 .pill.draft { color: var(--warn); border-color: var(--warn); } .pill.final { color: var(--ok); border-color: var(--ok); }
 .badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 600; align-self: flex-start; }
+.badge.auto { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
 .badge.agent { background: color-mix(in srgb, var(--agent) 15%, transparent); color: var(--agent); }
 .badge.person { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
 .trace { border-left: 3px solid var(--agent); padding: 4px 12px; }
@@ -40,10 +41,7 @@ th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line
 .manual { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
 textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; resize: vertical; }
 .brand { display: flex; align-items: center; gap: 16px; }
-.tabs { display: flex; gap: 4px; }
-.tab { border-color: transparent; background: transparent; font-weight: 600; color: var(--muted); }
-.tab.active { background: var(--bg); border-color: var(--line); color: var(--ink); }
-.audit { padding: 16px; }
+.audit-main { padding: 16px; display: block; }
 .filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 10px; }
 select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
 #audit-table { table-layout: auto; }
@@ -58,7 +56,24 @@ select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid 
 .jwt dt { color: var(--muted); } .jwt dd { margin: 0; overflow-wrap: anywhere; }
 .jwt dd.key { font-weight: 700; color: var(--agent); }
 .jwt pre { font-size: 11px; max-height: 260px; overflow: auto; background: var(--bg); padding: 6px; border-radius: 6px; }
-.badge.auto { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
 @media (max-width: 700px) { #audit-table th:nth-child(6), #audit-table td:nth-child(6) { display: none; } }
 input[type=checkbox] { width: auto; vertical-align: middle; margin: 0 4px 0 0; }
 .direct { color: var(--warn); font-weight: 600; }
+
+/* Each app has its own header, so the audience always knows which one is on screen */
+header.app { color: #fff; border-bottom: 0; }
+header.app .muted, header.app .who .muted { color: rgba(255,255,255,.75); }
+header.app button { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.3); }
+header.app .badge.agent { background: rgba(255,255,255,.18); color: #fff; }
+body.crm header.app { background: #1f3b73; }
+body.assistant header.app { background: #5b2aa6; }
+body.audit header.app { background: #2b2f36; }
+.brand small { font-weight: 500; opacity: .8; margin-left: 6px; }
+.links { display: flex; gap: 14px; font-size: 13px; }
+.links a { color: rgba(255,255,255,.85); text-decoration: none; }
+.links a.here { color: #fff; font-weight: 700; border-bottom: 2px solid #fff; }
+.split { display: grid; grid-template-columns: 1fr 1.6fr; gap: 16px; padding: 16px; }
+@media (max-width: 1000px) { .split { grid-template-columns: 1fr; } }
+.chat { display: flex; gap: 8px; margin-top: 12px; }
+.chat input { flex: 1; }
+.notes-acc { margin-top: 16px; }

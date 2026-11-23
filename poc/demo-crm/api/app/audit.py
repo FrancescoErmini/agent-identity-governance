@@ -18,8 +18,10 @@ from .db import conn
 SKIP = ("/health", "/audit", "/docs", "/openapi.json")
 
 # Where the call came from, from the network (Docker DNS), not from anything the caller says.
-SOURCES = {
+SOURCES = {                     # first match wins: crm-assistant-ui before crm-assistant
     "demo-crm-ui": "demo-crm UI",
+    "crm-assistant-ui": "AI assistant app",
+    "audit-console": "audit console",
     "demo-crm-mcp": "MCP server, via LiteLLM",
     "crm-assistant": "crm-assistant, direct",
     "agent-dq": "agent-dq, direct",
