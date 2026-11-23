@@ -33,14 +33,62 @@
   },
   "clients": [
     {
-      "clientId": "demo-crm",
-      "name": "demo-crm (UI login, API audience)",
+      "clientId": "crm-web",
+      "name": "demo-crm web app and audit console (classic login, no AI)",
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "redirectUris": [
-        "http://crm.demo.local:3000/*",
-        "http://localhost:3000/*"
+        "http://localhost:3000/*",
+        "http://localhost:3002/*",
+        "http://crm.demo.local:3000/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "protocolMappers": [
+        {
+          "name": "aud-demo-crm",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "demo-crm",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "territory",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "territory",
+            "claim.name": "territory",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "fullScopeAllowed": false
+    },
+    {
+      "clientId": "demo-crm",
+      "name": "AI assistant for demo-crm (login with delegation consent)",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3001/*"
       ],
       "webOrigins": [
         "+"
@@ -239,6 +287,13 @@
       },
       {
         "client": "demo-cli",
+        "roles": [
+          "rep",
+          "area-manager"
+        ]
+      },
+      {
+        "client": "crm-web",
         "roles": [
           "rep",
           "area-manager"

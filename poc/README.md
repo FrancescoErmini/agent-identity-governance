@@ -9,9 +9,9 @@ It is built in steps. Each step ends with a check script that passes from a clea
 | --- | --- | --- |
 | **1 · Stack and identity** ✓ | Keycloak realm, LiteLLM gateway that verifies Keycloak tokens, demo-crm API with synthetic data | `tests/step1_check.py`: 21 checks |
 | **2 · Agents** ✓ | MCP server, UI with “via agent” badges, `agent-dq`, `crm-assistant` with token exchange | `tests/step2_check.py`: acts 1–4, 16 checks |
-| **3 · Controls** ✓ | “Draft only” guardrail at the gateway, direct-call test, kill switch | `tests/demo_check.py`: the seven acts, 13 checks (15 with the AS-IS act) |
+| **3 · Controls** ✓ | “Draft only” guardrail at the gateway, direct-call test, kill switch | `tests/demo_check.py`: the seven acts, 13 checks (16 with the AS-IS act) |
 | **4 · Demo pack** ✓ | [Demo script](DEMO.md) (Italian), evidence of every act | `evidence/sample-2026-11-23/` |
-| **5 · Audit** ✓ | Notes written by hand (AS-IS), an append-only audit trail in demo-crm with the JWT that reached the API, the JWTs LiteLLM saw, and an **Audit** tab in the UI | `tests/audit_check.py`: 13 checks |
+| **5 · Audit** ✓ | Notes written by hand (AS-IS), an append-only audit trail in demo-crm with the JWT that reached the API, the JWTs LiteLLM saw, and an audit console; CRM, assistant and audit as three separate apps | `tests/audit_check.py`: 13 checks |
 
 ## Run it
 
@@ -25,7 +25,7 @@ docker compose --profile check run --rm check
 ```
 
 The last command should end with `21/21 checks passed`, `16/16 checks passed` and
-`Demo: 15/15 checks passed` and `Audit: 13/13 checks passed`.
+`Demo: 16/16 checks passed` and `Audit: 13/13 checks passed`.
 
 To use the UI, add this line to `/etc/hosts` once (`sudo nano /etc/hosts` on a Mac). Tokens are
 issued for `sso.demo.local`, so the name must match inside and outside Docker:
@@ -34,13 +34,23 @@ issued for `sso.demo.local`, so the name must match inside and outside Docker:
 127.0.0.1 sso.demo.local
 ```
 
-Then open **http://localhost:3000** (use `localhost`: the browser allows the PKCE login only on a
-secure origin, and `localhost` counts as one). Sign in as `luca` / `luca`. Keycloak asks
-“Allow agent-crm-assistant to act on your behalf?”: that consent is what lets the assistant work for you.
+There are three web apps (use `localhost`: the browser allows the PKCE login only on a secure origin, and
+`localhost` counts as one). Sign in as `luca` / `luca`:
+
+- **demo-crm**, http://localhost:3000: the everyday CRM, no AI. Keycloak client `crm-web`, plain login.
+- **AI assistant**, http://localhost:3001: a separate app beside the CRM. Keycloak client `demo-crm`; the first
+  time, Keycloak asks “Allow agent-crm-assistant to act on your behalf?”: that consent is what lets the
+  assistant work for you.
+- **Audit console**, http://localhost:3002: who did what, with which JWT (area managers).
+
+After pulling this version, run `docker compose down -v` once: the Keycloak realm (new `crm-web` client) is
+imported only into an empty database.
 
 | Service | URL | Login |
 | --- | --- | --- |
-| **demo-crm UI** | http://localhost:3000 | `luca` / `luca` (or `giulia`, `marco`) |
+| **demo-crm** | http://localhost:3000 | `luca` / `luca` (or `giulia`, `marco`) |
+| **AI assistant** | http://localhost:3001 | same users |
+| **Audit console** | http://localhost:3002 | `luca` (area manager) |
 | Keycloak admin | http://sso.demo.local:8080 | `admin` / `KC_ADMIN_PASSWORD` |
 | LiteLLM gateway | http://localhost:4000 | a Keycloak token (agents and people) |
 | LiteLLM admin UI | http://localhost:4000/ui | `admin` / `LITELLM_MASTER_KEY` |
@@ -76,7 +86,9 @@ git-ignored; [`evidence/sample-2026-11-23/`](evidence/sample-2026-11-23/) is a c
 | `litellm` | Gateway. Verifies the Keycloak token, admits a client only if it has a LiteLLM team, applies each team's tool list and the “draft only” guardrail, logs every call with the person's `sub` and the client's team |
 | `litellm-setup` | One-shot: one LiteLLM team per Keycloak client |
 | `demo-crm-api` | The target app. Trusts only Keycloak, applies its own roles, records `created_by`, `via_agent` and the correlation id |
-| `demo-crm-ui` | Where every flow ends: accounts, assistant, notes with “via agent” badges, reminders |
+| `demo-crm-ui` | demo-crm web app (:3000): accounts, visits, notes by hand, drafts proposed by agents to confirm, reminders |
+| `crm-assistant-ui` | AI assistant app (:3001): assistant actions and chat, the scheduler button for agent-dq |
+| `audit-console` | Audit console (:3002). The three apps share one image (`demo-crm/ui`, `APP=crm|assistant|audit`) |
 | `demo-crm-mcp` | MCP server, seven narrow tools; passes on the bearer LiteLLM forwards |
 | `crm-assistant` | Delegated agent: exchanges the rep's token (sub = rep, act = agent), then tools through LiteLLM |
 | `agent-dq` | Autonomous agent: its own token, role `dq-agent`, creates reminders. `POST /run` stands in for the nightly scheduler |
@@ -117,7 +129,7 @@ On the gateway side, the LiteLLM auth hook writes the decoded JWTs it checks (th
 token and the token it forwards to the MCP server) to a JSON-lines log (`GATEWAY_JWT_LOG`). This needs no
 LiteLLM Enterprise licence.
 
-In the UI, area managers (Luca) get an **Audit** tab. Click a row to see the JWT at the API next to the JWTs at
+In the audit console (http://localhost:3002, area managers such as Luca), click a row to see the JWT at the API next to the JWTs at
 LiteLLM for the same correlation id: same `jti`, `sub` = the person, `act` = the agent. A call that bypassed the
 gateway shows no JWT at LiteLLM. API: `GET /audit` and `GET /audit/gateway` (area managers, not agents).
 

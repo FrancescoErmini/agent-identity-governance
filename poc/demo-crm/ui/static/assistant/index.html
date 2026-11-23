@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI assistant</title>
+<link rel="stylesheet" href="/shared/style.css">
+</head>
+<body class="assistant">
+<header class="app">
+  <div class="brand">AI assistant <small>for demo-crm · agent-crm-assistant</small></div>
+  <div id="who" class="who"></div>
+</header>
+
+<main id="login-view" class="center" hidden>
+  <h1>AI assistant</h1>
+  <p class="muted">Sign in with your company account. The first time, Keycloak asks whether the assistant may act on your behalf.</p>
+  <button id="login" class="primary">Sign in</button>
+</main>
+
+<main id="app-view" class="split" hidden>
+  <section class="card">
+    <h2>Account <span id="territory" class="pill"></span></h2>
+    <select id="account"></select>
+    <div class="actions">
+      <button data-task="summary" class="primary">Prepare the visit and draft a note</button>
+      <button data-task="team_report">Team report</button>
+    </div>
+    <h2>Try what it must not do</h2>
+    <div class="actions">
+      <button data-task="forbidden_tool" class="ghost">Use a tool it doesn't have</button>
+      <button data-task="final_note" class="ghost">Write a final note</button>
+      <button data-task="bypass_gateway" class="ghost">Bypass the gateway</button>
+    </div>
+    <h2>Scheduler</h2>
+    <p class="muted small">Stands in for the nightly job that starts the autonomous agent.</p>
+    <button id="run-dq">Run agent-dq now</button>
+    <ul id="dq" class="list"></ul>
+  </section>
+
+  <section class="card">
+    <h2>Assistant</h2>
+    <div id="transcript"><p class="muted">Pick an action. Each one shows the delegated token and every tool call.</p></div>
+    <form id="chat" class="chat" hidden>
+      <input id="message" placeholder="Ask the assistant, e.g. summarise my last visits to this account">
+      <button type="submit" class="primary">Send</button>
+    </form>
+  </section>
+</main>
+
+<script>window.APP = { client: "demo-crm", scope: "openid delegation:client:agent-crm-assistant" };</script>
+<script src="/shared/oidc.js"></script>
+<script src="assistant.js"></script>
+</body>
+</html>

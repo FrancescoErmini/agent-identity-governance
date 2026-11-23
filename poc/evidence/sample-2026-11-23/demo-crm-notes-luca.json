@@ -1,13 +1,43 @@
 [
   {
-    "id": 4,
+    "id": 7,
     "account_id": "ACC-00000",
-    "text": "Visit summary for Dr. Caracciolo (general practice, San Piero A Sieve): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress.",
+    "text": "Visit summary for Dr. Caracciolo (general practice, Sant'Albino): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress.",
     "status": "draft",
     "created_by": "luca",
     "via_agent": "agent-crm-assistant",
-    "correlation_id": "corr-a3132066b981",
-    "created_at": "2026-11-23T07:35:15.444582+00:00"
+    "correlation_id": "corr-307917d8589c",
+    "created_at": "2026-11-23T10:34:35.760374+00:00"
+  },
+  {
+    "id": 6,
+    "account_id": "ACC-00000",
+    "text": "Final note sent straight to the API",
+    "status": "draft",
+    "created_by": "luca",
+    "via_agent": "agent-crm-assistant",
+    "correlation_id": "corr-83a239c1106a",
+    "created_at": "2026-11-23T10:34:35.016101+00:00"
+  },
+  {
+    "id": 5,
+    "account_id": "ACC-00000",
+    "text": "Visit summary for Dr. Caracciolo (general practice, Sant'Albino): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress.",
+    "status": "final",
+    "created_by": "luca",
+    "via_agent": "agent-crm-assistant",
+    "correlation_id": "corr-85eb46bbf446",
+    "created_at": "2026-11-23T10:34:32.754414+00:00"
+  },
+  {
+    "id": 4,
+    "account_id": "ACC-00000",
+    "text": "Met the doctor, follow up in two weeks",
+    "status": "final",
+    "created_by": "luca",
+    "via_agent": null,
+    "correlation_id": null,
+    "created_at": "2026-11-23T10:34:31.958797+00:00"
   },
   {
     "id": 3,
@@ -16,27 +46,27 @@
     "status": "draft",
     "created_by": "luca",
     "via_agent": "agent-crm-assistant",
-    "correlation_id": "corr-dd125522a961",
-    "created_at": "2026-11-23T07:35:14.850582+00:00"
+    "correlation_id": "corr-6f3280fdb406",
+    "created_at": "2026-11-23T10:32:26.359850+00:00"
   },
   {
     "id": 2,
     "account_id": "ACC-00000",
-    "text": "Visit summary for Dr. Caracciolo (general practice, San Piero A Sieve): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress.",
-    "status": "final",
+    "text": "Visit summary for Dr. Caracciolo (general practice, Sant'Albino): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress.",
+    "status": "draft",
     "created_by": "luca",
     "via_agent": "agent-crm-assistant",
-    "correlation_id": "corr-57ccf5046479",
-    "created_at": "2026-11-23T07:35:13.026570+00:00"
+    "correlation_id": "corr-69976e03c1ed",
+    "created_at": "2026-11-23T10:32:19.006195+00:00"
   },
   {
     "id": 1,
     "account_id": "ACC-00000",
-    "text": "Met the doctor, follow up in two weeks",
+    "text": "Met the doctor, follow up in two weeks.",
     "status": "final",
     "created_by": "luca",
     "via_agent": null,
     "correlation_id": null,
-    "created_at": "2026-11-23T07:35:11.736436+00:00"
+    "created_at": "2026-11-23T10:32:15.335564+00:00"
   }
 ]

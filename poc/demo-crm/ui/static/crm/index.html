@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>demo-crm</title>
+<link rel="stylesheet" href="/shared/style.css">
+</head>
+<body class="crm">
+<header class="app">
+  <div class="brand">demo-crm <small>Field sales CRM · synthetic data</small></div>
+  <div id="who" class="who"></div>
+</header>
+
+<main id="login-view" class="center" hidden>
+  <h1>demo-crm</h1>
+  <p class="muted">Sign in with your company account (Keycloak).</p>
+  <button id="login" class="primary">Sign in</button>
+  <p class="muted small">Users: luca, giulia, marco. Password = username.</p>
+</main>
+
+<main id="app-view" class="grid" hidden>
+  <section class="card">
+    <h2>Accounts <span id="territory" class="pill"></span></h2>
+    <input id="q" placeholder="Search name or city">
+    <ul id="accounts" class="list"></ul>
+  </section>
+
+  <section class="card">
+    <h2 id="acc-title">Select an account</h2>
+    <div id="acc-detail" class="muted">Pick an account on the left.</div>
+    <form id="manual-note" class="manual" hidden>
+      <label for="note-text"><b>New visit note</b></label>
+      <textarea id="note-text" rows="4" placeholder="e.g. Discussed the new study; follow up in two weeks."></textarea>
+      <button type="submit" class="primary">Save note</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>My notes</h2>
+    <ul id="notes" class="list"></ul>
+    <h2>Reminders</h2>
+    <ul id="reminders" class="list"></ul>
+  </section>
+</main>
+
+<script>window.APP = { client: "crm-web", scope: "openid" };</script>
+<script src="/shared/oidc.js"></script>
+<script src="crm.js"></script>
+</body>
+</html>

@@ -23,7 +23,7 @@ ASSISTANT = "http://crm-assistant:8000"
 DQ = "http://agent-dq:8000"
 GATEWAY = "http://litellm:4000"
 MASTER_KEY = os.environ["LITELLM_MASTER_KEY"]
-REDIRECT = "http://localhost:3000/"
+REDIRECT = {"demo-crm": "http://localhost:3001/", "crm-web": "http://localhost:3000/"}   # assistant app, CRM
 
 results: list[tuple[bool, str]] = []
 
@@ -57,14 +57,16 @@ def j(raw):
         return raw.decode(errors="replace")
 
 
-def browser_login(username: str, scope: str) -> str:
-    """Authorization Code + PKCE as the demo-crm UI does it, accepting the consent screen."""
+def browser_login(username: str, scope: str, client: str = "demo-crm") -> str:
+    """Authorization Code + PKCE as the web apps do it, accepting the consent screen if one shows.
+
+    client demo-crm = the AI assistant app (asks for delegation, consent); crm-web = the CRM (plain login)."""
     jar = CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar), NoRedirect)
     verifier = secrets.token_urlsafe(48)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
     url = f"{KC}/auth?" + urllib.parse.urlencode({
-        "client_id": "demo-crm", "response_type": "code", "redirect_uri": REDIRECT, "scope": scope,
+        "client_id": client, "response_type": "code", "redirect_uri": REDIRECT[client], "scope": scope,
         "code_challenge": challenge, "code_challenge_method": "S256", "state": "check"})
     form_action = lambda page: urllib.parse.urljoin(KC, html.unescape(re.search(r'<form[^>]*action="([^"]+)"', page).group(1)))
     _, _, page = http("GET", url, opener=opener)
@@ -78,8 +80,8 @@ def browser_login(username: str, scope: str) -> str:
         location = headers.get("Location", "")
     code = urllib.parse.parse_qs(urllib.parse.urlparse(location).query).get("code", [None])[0]
     assert code, f"login for {username} did not return a code: {status} {location[:200]}"
-    _, _, raw = http("POST", f"{KC}/token", form={"grant_type": "authorization_code", "client_id": "demo-crm",
-                                                 "code": code, "redirect_uri": REDIRECT, "code_verifier": verifier})
+    _, _, raw = http("POST", f"{KC}/token", form={"grant_type": "authorization_code", "client_id": client,
+                                                 "code": code, "redirect_uri": REDIRECT[client], "code_verifier": verifier})
     return json.loads(raw)["access_token"]
 
 

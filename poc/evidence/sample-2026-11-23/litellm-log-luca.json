@@ -1,62 +1,107 @@
 [
   {
-    "startTime": "2026-11-23T07:35:14.426000Z",
-    "call_type": "call_mcp_tool",
-    "user": "314148f1-78d0-44da-a551-b70f74573585",
-    "team_id": "agent-crm-assistant",
-    "model": "MCP: create_reminder",
-    "mcp_namespaced_tool_name": "demo_crm/create_reminder",
-    "status": "failure"
-  },
-  {
-    "startTime": "2026-11-23T07:35:13.487000Z",
+    "startTime": "2026-11-23T10:34:32.807000Z",
     "call_type": "list_mcp_tools",
-    "user": "314148f1-78d0-44da-a551-b70f74573585",
+    "user": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
     "team_id": "agent-crm-assistant",
     "model": "MCP: list_tools",
     "mcp_namespaced_tool_name": null,
     "status": "success"
   },
   {
-    "startTime": "2026-11-23T07:35:13.352000Z",
+    "startTime": "2026-11-23T10:34:32.723000Z",
     "call_type": "call_mcp_tool",
-    "user": "314148f1-78d0-44da-a551-b70f74573585",
-    "team_id": "agent-crm-assistant",
-    "model": "MCP: get_team_report",
-    "mcp_namespaced_tool_name": "demo_crm/get_team_report",
-    "status": "success"
-  },
-  {
-    "startTime": "2026-11-23T07:35:13.063000Z",
-    "call_type": "list_mcp_tools",
-    "user": "314148f1-78d0-44da-a551-b70f74573585",
-    "team_id": "agent-crm-assistant",
-    "model": "MCP: list_tools",
-    "mcp_namespaced_tool_name": null,
-    "status": "success"
-  },
-  {
-    "startTime": "2026-11-23T07:35:12.998000Z",
-    "call_type": "call_mcp_tool",
-    "user": "314148f1-78d0-44da-a551-b70f74573585",
+    "user": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
     "team_id": "agent-crm-assistant",
     "model": "MCP: draft_visit_note",
     "mcp_namespaced_tool_name": "demo_crm/draft_visit_note",
     "status": "success"
   },
   {
-    "startTime": "2026-11-23T07:35:12.803000Z",
+    "startTime": "2026-11-23T10:34:32.618000Z",
     "call_type": "list_mcp_tools",
-    "user": "314148f1-78d0-44da-a551-b70f74573585",
+    "user": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
     "team_id": "agent-crm-assistant",
     "model": "MCP: list_tools",
     "mcp_namespaced_tool_name": null,
     "status": "success"
   },
   {
-    "startTime": "2026-11-23T07:35:12.539000Z",
+    "startTime": "2026-11-23T10:34:32.482000Z",
     "call_type": "call_mcp_tool",
-    "user": "314148f1-78d0-44da-a551-b70f74573585",
+    "user": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
+    "team_id": "agent-crm-assistant",
+    "model": "MCP: get_account_summary",
+    "mcp_namespaced_tool_name": "demo_crm/get_account_summary",
+    "status": "success"
+  },
+  {
+    "startTime": "2026-11-23T10:32:25.261000Z",
+    "call_type": "call_mcp_tool",
+    "user": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
+    "team_id": "agent-crm-assistant",
+    "model": "MCP: draft_visit_note",
+    "mcp_namespaced_tool_name": "demo_crm/draft_visit_note",
+    "status": "failure"
+  },
+  {
+    "startTime": "2026-11-23T10:32:24.333000Z",
+    "call_type": "call_mcp_tool",
+    "user": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
+    "team_id": "agent-crm-assistant",
+    "model": "MCP: create_reminder",
+    "mcp_namespaced_tool_name": "demo_crm/create_reminder",
+    "status": "failure"
+  },
+  {
+    "startTime": "2026-11-23T10:32:21.014000Z",
+    "call_type": "list_mcp_tools",
+    "user": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
+    "team_id": "agent-crm-assistant",
+    "model": "MCP: list_tools",
+    "mcp_namespaced_tool_name": null,
+    "status": "success"
+  },
+  {
+    "startTime": "2026-11-23T10:32:20.886000Z",
+    "call_type": "call_mcp_tool",
+    "user": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
+    "team_id": "agent-crm-assistant",
+    "model": "MCP: get_team_report",
+    "mcp_namespaced_tool_name": "demo_crm/get_team_report",
+    "status": "success"
+  },
+  {
+    "startTime": "2026-11-23T10:32:19.054000Z",
+    "call_type": "list_mcp_tools",
+    "user": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
+    "team_id": "agent-crm-assistant",
+    "model": "MCP: list_tools",
+    "mcp_namespaced_tool_name": null,
+    "status": "success"
+  },
+  {
+    "startTime": "2026-11-23T10:32:18.972000Z",
+    "call_type": "call_mcp_tool",
+    "user": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
+    "team_id": "agent-crm-assistant",
+    "model": "MCP: draft_visit_note",
+    "mcp_namespaced_tool_name": "demo_crm/draft_visit_note",
+    "status": "success"
+  },
+  {
+    "startTime": "2026-11-23T10:32:18.678000Z",
+    "call_type": "list_mcp_tools",
+    "user": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
+    "team_id": "agent-crm-assistant",
+    "model": "MCP: list_tools",
+    "mcp_namespaced_tool_name": null,
+    "status": "success"
+  },
+  {
+    "startTime": "2026-11-23T10:32:18.252000Z",
+    "call_type": "call_mcp_tool",
+    "user": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
     "team_id": "agent-crm-assistant",
     "model": "MCP: get_account_summary",
     "mcp_namespaced_tool_name": "demo_crm/get_account_summary",

@@ -1,6 +1,6 @@
 """Audit trail in demo-crm: who did what, with the JWT that came in.
 
-AS-IS: Luca writes a note by hand in the UI -> the audit names Luca, no agent, token from demo-crm.
+AS-IS: Luca writes a note by hand in the UI -> the audit names Luca, no agent, token from the CRM app (client crm-web).
 TO-BE delegated: the assistant drafts a note for Luca -> the audit names Luca through the agent (act claim).
 TO-BE autonomous: agent-dq creates reminders -> the audit names the agent, no person.
 """
@@ -33,8 +33,9 @@ def main():
     _, _, raw = t.http("GET", f"{t.CRM}/accounts", luca)
     account = t.j(raw)["accounts"][0]["id"]
 
-    # AS-IS: by hand, through the UI
-    status, _, raw = t.http("POST", f"{UI}/api/notes", luca, {"account_id": account, "text": "Written by hand", "status": "final"})
+    # AS-IS: by hand, through the CRM app (its own Keycloak client, no AI consent)
+    luca_crm = t.browser_login("luca", "openid", client="crm-web")
+    status, _, raw = t.http("POST", f"{UI}/api/notes", luca_crm, {"account_id": account, "text": "Written by hand", "status": "final"})
     manual = t.j(raw)
     check("AS-IS: Luca's own note is final, no agent", status == 201 and manual["status"] == "final"
           and manual["via_agent"] is None, (status, manual))
@@ -43,8 +44,8 @@ def main():
     tok = row.get("token_claims") or {}
     check("AS-IS audit: person luca, no agent, from the demo-crm UI",
           row.get("actor_type") == "person" and row.get("agent") is None and row.get("source") == "demo-crm UI", row)
-    check("AS-IS audit: the JWT that came in is shown, verified, azp demo-crm, no act",
-          row.get("token_verified") and tok.get("sub") == sub and tok.get("azp") == "demo-crm" and "act" not in tok
+    check("AS-IS audit: the JWT that came in is shown, verified, azp crm-web, no act",
+          row.get("token_verified") and tok.get("sub") == sub and tok.get("azp") == "crm-web" and "act" not in tok
           and (row.get("token_header") or {}).get("kid"), row)
 
     # TO-BE delegated: the assistant, through LiteLLM and the MCP server

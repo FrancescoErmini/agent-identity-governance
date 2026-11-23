@@ -91,11 +91,26 @@ services:
       pg-crm: { condition: service_healthy }
       keycloak-config: { condition: service_completed_successfully }
 
-  demo-crm-ui:                                     # where every flow ends: http://localhost:3000
+  demo-crm-ui:                                     # the everyday CRM, no AI: http://localhost:3000
     build: ./demo-crm/ui
+    environment: { APP: crm }
     ports: ["3000:3000"]
     networks: [demo]
+    depends_on: [demo-crm-api]
+
+  crm-assistant-ui:                                # the AI assistant app, beside the CRM: http://localhost:3001
+    build: ./demo-crm/ui
+    environment: { APP: assistant }
+    ports: ["3001:3000"]
+    networks: [demo]
     depends_on: [demo-crm-api, crm-assistant, agent-dq]
+
+  audit-console:                                   # who did what, with which JWT: http://localhost:3002
+    build: ./demo-crm/ui
+    environment: { APP: audit }
+    ports: ["3002:3000"]
+    networks: [demo]
+    depends_on: [demo-crm-api]
 
   demo-crm-mcp:
     build: ./mcp-servers/demo-crm

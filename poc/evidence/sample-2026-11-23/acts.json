@@ -1,5 +1,5 @@
 {
-  "Act 1 \u00b7 Luca logs in to demo-crm through Keycloak and sees only his territory": {
+  "Act 1 \u00b7 Luca signs in to the AI assistant app: Keycloak asks his consent; he sees only his territory": {
     "checks": [
       {
         "check": "roles and territory in the JWT drive the app (NORTH only)",
@@ -15,15 +15,15 @@
         "what": "luca's access token after login with consent (claims)",
         "payload": {
           "iss": "http://sso.demo.local:8080/realms/ai-demo",
-          "sub": "314148f1-78d0-44da-a551-b70f74573585",
+          "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
           "azp": "demo-crm",
           "aud": [
-            "agent-crm-assistant",
-            "demo-crm"
+            "demo-crm",
+            "agent-crm-assistant"
           ],
           "scope": "openid delegation:client:agent-crm-assistant profile email",
           "may_act": {
-            "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
+            "sub": "f6d679e3-e266-4c6b-a2bf-41f80883f015",
             "client_id": "agent-crm-assistant"
           },
           "resource_access": {
@@ -43,11 +43,15 @@
   "AS-IS \u00b7 Luca writes a visit note by hand; the audit names Luca, no agent": {
     "checks": [
       {
+        "check": "the CRM login asks no consent and grants no delegation (no may_act), roles from the token",
+        "passed": true
+      },
+      {
         "check": "the note is final at once, created_by luca, no agent",
         "passed": true
       },
       {
-        "check": "audit: luca by hand, from the demo-crm UI; JWT verified, azp demo-crm, no act",
+        "check": "audit: luca by hand, from the demo-crm UI; JWT verified, azp crm-web, no act",
         "passed": true
       }
     ],
@@ -55,21 +59,21 @@
       {
         "what": "POST /notes by hand through the UI -> HTTP 201",
         "payload": {
-          "id": 1,
+          "id": 4,
           "account_id": "ACC-00000",
           "text": "Met the doctor, follow up in two weeks",
           "status": "final",
           "created_by": "luca",
           "via_agent": null,
           "correlation_id": null,
-          "created_at": "2026-11-23T07:35:11.736436+00:00"
+          "created_at": "2026-11-23T10:34:31.958797+00:00"
         }
       },
       {
         "what": "audit row for the manual note",
         "payload": {
-          "id": 2,
-          "at": "2026-11-23T07:35:11.747296+00:00",
+          "id": 22,
+          "at": "2026-11-23T10:34:31.969390+00:00",
           "method": "POST",
           "path": "/notes",
           "status": 201,
@@ -77,43 +81,37 @@
           "detail": null,
           "actor_type": "person",
           "person": "luca",
-          "person_sub": "314148f1-78d0-44da-a551-b70f74573585",
+          "person_sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
           "agent": null,
           "source": "demo-crm UI",
           "correlation_id": null,
-          "object": "note:1 (final)",
+          "object": "note:4 (final)",
           "token_header": {
             "alg": "RS256",
-            "kid": "SyzqqgPrB7eHVtu61bAEmzHN2FrMbl-1vVA40_d6XQc",
+            "kid": "_I1I_M-FdANVIlyf7jjJefLQe2B-qMcsK_ftXgIGxzA",
             "typ": "JWT"
           },
           "token_claims": {
             "acr": "1",
-            "aud": [
-              "agent-crm-assistant",
-              "demo-crm"
-            ],
-            "azp": "demo-crm",
-            "exp": 1795419611,
-            "iat": 1795419311,
+            "aud": "demo-crm",
+            "azp": "crm-web",
+            "exp": 1795430371,
+            "iat": 1795430071,
             "iss": "http://sso.demo.local:8080/realms/ai-demo",
-            "jti": "onrtac:a95e59e0-7afe-04a6-7345-d75db914b9c2",
-            "sid": "wvql1q_2SDlt_plkak8vwWUt",
-            "sub": "314148f1-78d0-44da-a551-b70f74573585",
+            "jti": "onrtac:24b1c7ed-55f3-4e96-4182-e445cc5f61d4",
+            "sid": "caDxmBgJpA1pJ0xgQVHuxz11",
+            "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
             "typ": "Bearer",
             "name": "Luca Bianchi",
             "email": "luca@demo.local",
-            "scope": "openid delegation:client:agent-crm-assistant profile email",
-            "may_act": {
-              "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
-              "client_id": "agent-crm-assistant"
-            },
-            "auth_time": 1795419311,
+            "scope": "openid profile email",
+            "auth_time": 1795430071,
             "territory": "NORTH",
             "given_name": "Luca",
             "family_name": "Bianchi",
             "email_verified": true,
             "allowed-origins": [
+              "http://localhost:3002",
               "http://localhost:3000",
               "http://crm.demo.local:3000"
             ],
@@ -148,11 +146,11 @@
       {
         "what": "crm-assistant /assist task=summary -> HTTP 200",
         "payload": {
-          "correlation_id": "corr-57ccf5046479",
+          "correlation_id": "corr-85eb46bbf446",
           "acting_for": "luca",
-          "sub": "314148f1-78d0-44da-a551-b70f74573585",
+          "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
           "act": {
-            "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
+            "sub": "f6d679e3-e266-4c6b-a2bf-41f80883f015",
             "client_id": "agent-crm-assistant"
           },
           "roles_in_delegated_token": [
@@ -160,14 +158,14 @@
           ],
           "delegated_token_claims": {
             "iss": "http://sso.demo.local:8080/realms/ai-demo",
-            "sub": "314148f1-78d0-44da-a551-b70f74573585",
+            "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
             "azp": "agent-crm-assistant",
             "aud": [
-              "litellm-proxy",
-              "demo-crm"
+              "demo-crm",
+              "litellm-proxy"
             ],
             "act": {
-              "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
+              "sub": "f6d679e3-e266-4c6b-a2bf-41f80883f015",
               "client_id": "agent-crm-assistant"
             },
             "scope": "crm:ai profile email",
@@ -180,7 +178,7 @@
             },
             "territory": "NORTH",
             "preferred_username": "luca",
-            "exp": 1795419611
+            "exp": 1795430371
           },
           "mode": "scripted",
           "steps": [
@@ -193,7 +191,7 @@
                 "id": "ACC-00000",
                 "name": "Dr. Caracciolo",
                 "specialty": "general practice",
-                "city": "San Piero A Sieve",
+                "city": "Sant'Albino",
                 "territory": "NORTH",
                 "owner": "luca",
                 "visits": [
@@ -240,21 +238,21 @@
               "tool": "draft_visit_note",
               "args": {
                 "account_id": "ACC-00000",
-                "text": "Visit summary for Dr. Caracciolo (general practice, San Piero A Sieve): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress."
+                "text": "Visit summary for Dr. Caracciolo (general practice, Sant'Albino): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress."
               },
               "result": {
-                "id": 2,
+                "id": 5,
                 "account_id": "ACC-00000",
-                "text": "Visit summary for Dr. Caracciolo (general practice, San Piero A Sieve): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress.",
+                "text": "Visit summary for Dr. Caracciolo (general practice, Sant'Albino): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress.",
                 "status": "draft",
                 "created_by": "luca",
                 "via_agent": "agent-crm-assistant",
-                "correlation_id": "corr-57ccf5046479",
-                "created_at": "2026-11-23T07:35:13.026570+00:00"
+                "correlation_id": "corr-85eb46bbf446",
+                "created_at": "2026-11-23T10:34:32.754414+00:00"
               }
             }
           ],
-          "answer": "Visit summary for Dr. Caracciolo (general practice, San Piero A Sieve): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress."
+          "answer": "Visit summary for Dr. Caracciolo (general practice, Sant'Albino): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress."
         }
       }
     ]
@@ -270,11 +268,11 @@
       {
         "what": "crm-assistant /assist task=team_report -> HTTP 200",
         "payload": {
-          "correlation_id": "corr-c5c1573226a6",
+          "correlation_id": "corr-ad7e060976cb",
           "acting_for": "luca",
-          "sub": "314148f1-78d0-44da-a551-b70f74573585",
+          "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
           "act": {
-            "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
+            "sub": "f6d679e3-e266-4c6b-a2bf-41f80883f015",
             "client_id": "agent-crm-assistant"
           },
           "roles_in_delegated_token": [
@@ -282,14 +280,14 @@
           ],
           "delegated_token_claims": {
             "iss": "http://sso.demo.local:8080/realms/ai-demo",
-            "sub": "314148f1-78d0-44da-a551-b70f74573585",
+            "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
             "azp": "agent-crm-assistant",
             "aud": [
-              "litellm-proxy",
-              "demo-crm"
+              "demo-crm",
+              "litellm-proxy"
             ],
             "act": {
-              "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
+              "sub": "f6d679e3-e266-4c6b-a2bf-41f80883f015",
               "client_id": "agent-crm-assistant"
             },
             "scope": "crm:ai profile email",
@@ -302,7 +300,7 @@
             },
             "territory": "NORTH",
             "preferred_username": "luca",
-            "exp": 1795419611
+            "exp": 1795430371
           },
           "mode": "scripted",
           "steps": [
@@ -332,9 +330,9 @@
       {
         "what": "agent-dq /run -> HTTP 200",
         "payload": {
-          "correlation_id": "corr-145ddb446e72",
+          "correlation_id": "corr-4f98638d5e12",
           "acting_as": "agent-dq",
-          "sub": "a3e53ef9-523b-4b7e-9327-7b71d91a702f",
+          "sub": "81d3a9de-afd9-49dc-9211-6593f7c8c4ff",
           "roles": [
             "dq-agent"
           ],
@@ -347,24 +345,24 @@
               "result": {
                 "items": [
                   {
-                    "id": "VIS-00959",
-                    "account_id": "ACC-00112",
+                    "id": "VIS-00530",
+                    "account_id": "ACC-00025",
                     "rep": "giulia",
-                    "visit_date": "2026-10-27",
+                    "visit_date": "2026-10-20",
                     "outcome": null,
-                    "products": "Pressil, Cardiox",
+                    "products": "Renalis, Cardiox",
                     "next_step": null,
-                    "account_name": "Dr. Fuseli"
+                    "account_name": "Dr. Gentilini"
                   },
                   {
-                    "id": "VIS-00824",
-                    "account_id": "ACC-00256",
+                    "id": "VIS-00011",
+                    "account_id": "ACC-00037",
                     "rep": "giulia",
-                    "visit_date": "2026-10-27",
+                    "visit_date": "2026-10-16",
                     "outcome": null,
-                    "products": "Renalis, Pressil",
+                    "products": "Cardiox, Pressil",
                     "next_step": null,
-                    "account_name": "Dr. Pucci"
+                    "account_name": "Dr. Mocenigo"
                   }
                 ]
               }
@@ -372,35 +370,35 @@
             {
               "tool": "create_reminder",
               "args": {
-                "visit_id": "VIS-00959",
-                "text": "Please complete outcome, next_step for your visit to Dr. Fuseli on 2026-10-27."
+                "visit_id": "VIS-00530",
+                "text": "Please complete outcome, next_step for your visit to Dr. Gentilini on 2026-10-20."
               },
               "result": {
-                "id": 1,
-                "visit_id": "VIS-00959",
+                "id": 6,
+                "visit_id": "VIS-00530",
                 "rep": "giulia",
-                "text": "Please complete outcome, next_step for your visit to Dr. Fuseli on 2026-10-27.",
+                "text": "Please complete outcome, next_step for your visit to Dr. Gentilini on 2026-10-20.",
                 "created_by": "service-account-agent-dq",
                 "via_agent": "agent-dq",
-                "correlation_id": "corr-145ddb446e72",
-                "created_at": "2026-11-23T07:35:13.982095+00:00"
+                "correlation_id": "corr-4f98638d5e12",
+                "created_at": "2026-11-23T10:34:33.947717+00:00"
               }
             },
             {
               "tool": "create_reminder",
               "args": {
-                "visit_id": "VIS-00824",
-                "text": "Please complete outcome, next_step for your visit to Dr. Pucci on 2026-10-27."
+                "visit_id": "VIS-00011",
+                "text": "Please complete outcome, next_step for your visit to Dr. Mocenigo on 2026-10-16."
               },
               "result": {
-                "id": 2,
-                "visit_id": "VIS-00824",
+                "id": 7,
+                "visit_id": "VIS-00011",
                 "rep": "giulia",
-                "text": "Please complete outcome, next_step for your visit to Dr. Pucci on 2026-10-27.",
+                "text": "Please complete outcome, next_step for your visit to Dr. Mocenigo on 2026-10-16.",
                 "created_by": "service-account-agent-dq",
                 "via_agent": "agent-dq",
-                "correlation_id": "corr-145ddb446e72",
-                "created_at": "2026-11-23T07:35:14.122103+00:00"
+                "correlation_id": "corr-4f98638d5e12",
+                "created_at": "2026-11-23T10:34:34.147254+00:00"
               }
             }
           ]
@@ -423,11 +421,11 @@
       {
         "what": "crm-assistant /assist task=forbidden_tool -> HTTP 200",
         "payload": {
-          "correlation_id": "corr-95a098cfd1d9",
+          "correlation_id": "corr-e6c4baeb8ee2",
           "acting_for": "luca",
-          "sub": "314148f1-78d0-44da-a551-b70f74573585",
+          "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
           "act": {
-            "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
+            "sub": "f6d679e3-e266-4c6b-a2bf-41f80883f015",
             "client_id": "agent-crm-assistant"
           },
           "roles_in_delegated_token": [
@@ -435,14 +433,14 @@
           ],
           "delegated_token_claims": {
             "iss": "http://sso.demo.local:8080/realms/ai-demo",
-            "sub": "314148f1-78d0-44da-a551-b70f74573585",
+            "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
             "azp": "agent-crm-assistant",
             "aud": [
-              "litellm-proxy",
-              "demo-crm"
+              "demo-crm",
+              "litellm-proxy"
             ],
             "act": {
-              "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
+              "sub": "f6d679e3-e266-4c6b-a2bf-41f80883f015",
               "client_id": "agent-crm-assistant"
             },
             "scope": "crm:ai profile email",
@@ -455,7 +453,7 @@
             },
             "territory": "NORTH",
             "preferred_username": "luca",
-            "exp": 1795419611
+            "exp": 1795430371
           },
           "mode": "scripted",
           "steps": [
@@ -475,11 +473,11 @@
       {
         "what": "crm-assistant /assist task=final_note -> HTTP 200",
         "payload": {
-          "correlation_id": "corr-6f475327b658",
+          "correlation_id": "corr-79b8bfe5db51",
           "acting_for": "luca",
-          "sub": "314148f1-78d0-44da-a551-b70f74573585",
+          "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
           "act": {
-            "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
+            "sub": "f6d679e3-e266-4c6b-a2bf-41f80883f015",
             "client_id": "agent-crm-assistant"
           },
           "roles_in_delegated_token": [
@@ -487,14 +485,14 @@
           ],
           "delegated_token_claims": {
             "iss": "http://sso.demo.local:8080/realms/ai-demo",
-            "sub": "314148f1-78d0-44da-a551-b70f74573585",
+            "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
             "azp": "agent-crm-assistant",
             "aud": [
-              "litellm-proxy",
-              "demo-crm"
+              "demo-crm",
+              "litellm-proxy"
             ],
             "act": {
-              "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
+              "sub": "f6d679e3-e266-4c6b-a2bf-41f80883f015",
               "client_id": "agent-crm-assistant"
             },
             "scope": "crm:ai profile email",
@@ -507,7 +505,7 @@
             },
             "territory": "NORTH",
             "preferred_username": "luca",
-            "exp": 1795419611
+            "exp": 1795430371
           },
           "mode": "scripted",
           "steps": [
@@ -538,11 +536,11 @@
       {
         "what": "crm-assistant /assist task=bypass_gateway -> HTTP 200",
         "payload": {
-          "correlation_id": "corr-dd125522a961",
+          "correlation_id": "corr-83a239c1106a",
           "acting_for": "luca",
-          "sub": "314148f1-78d0-44da-a551-b70f74573585",
+          "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
           "act": {
-            "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
+            "sub": "f6d679e3-e266-4c6b-a2bf-41f80883f015",
             "client_id": "agent-crm-assistant"
           },
           "roles_in_delegated_token": [
@@ -550,14 +548,14 @@
           ],
           "delegated_token_claims": {
             "iss": "http://sso.demo.local:8080/realms/ai-demo",
-            "sub": "314148f1-78d0-44da-a551-b70f74573585",
+            "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
             "azp": "agent-crm-assistant",
             "aud": [
-              "litellm-proxy",
-              "demo-crm"
+              "demo-crm",
+              "litellm-proxy"
             ],
             "act": {
-              "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
+              "sub": "f6d679e3-e266-4c6b-a2bf-41f80883f015",
               "client_id": "agent-crm-assistant"
             },
             "scope": "crm:ai profile email",
@@ -570,7 +568,7 @@
             },
             "territory": "NORTH",
             "preferred_username": "luca",
-            "exp": 1795419611
+            "exp": 1795430371
           },
           "mode": "scripted",
           "steps": [
@@ -582,14 +580,14 @@
                 "status": "final"
               },
               "result": {
-                "id": 3,
+                "id": 6,
                 "account_id": "ACC-00000",
                 "text": "Final note sent straight to the API",
                 "status": "draft",
                 "created_by": "luca",
                 "via_agent": "agent-crm-assistant",
-                "correlation_id": "corr-dd125522a961",
-                "created_at": "2026-11-23T07:35:14.850582+00:00"
+                "correlation_id": "corr-83a239c1106a",
+                "created_at": "2026-11-23T10:34:35.016101+00:00"
               }
             }
           ],
@@ -627,11 +625,11 @@
       {
         "what": "crm-assistant /assist task=summary -> HTTP 200",
         "payload": {
-          "correlation_id": "corr-a3132066b981",
+          "correlation_id": "corr-307917d8589c",
           "acting_for": "luca",
-          "sub": "314148f1-78d0-44da-a551-b70f74573585",
+          "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
           "act": {
-            "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
+            "sub": "f6d679e3-e266-4c6b-a2bf-41f80883f015",
             "client_id": "agent-crm-assistant"
           },
           "roles_in_delegated_token": [
@@ -639,14 +637,14 @@
           ],
           "delegated_token_claims": {
             "iss": "http://sso.demo.local:8080/realms/ai-demo",
-            "sub": "314148f1-78d0-44da-a551-b70f74573585",
+            "sub": "8b85a181-451e-4eb1-94ec-aba0fff1b06e",
             "azp": "agent-crm-assistant",
             "aud": [
-              "litellm-proxy",
-              "demo-crm"
+              "demo-crm",
+              "litellm-proxy"
             ],
             "act": {
-              "sub": "d0a665ae-7209-462f-becd-8b41577a42f1",
+              "sub": "f6d679e3-e266-4c6b-a2bf-41f80883f015",
               "client_id": "agent-crm-assistant"
             },
             "scope": "crm:ai profile email",
@@ -659,7 +657,7 @@
             },
             "territory": "NORTH",
             "preferred_username": "luca",
-            "exp": 1795419611
+            "exp": 1795430371
           },
           "mode": "scripted",
           "steps": [
@@ -672,7 +670,7 @@
                 "id": "ACC-00000",
                 "name": "Dr. Caracciolo",
                 "specialty": "general practice",
-                "city": "San Piero A Sieve",
+                "city": "Sant'Albino",
                 "territory": "NORTH",
                 "owner": "luca",
                 "visits": [
@@ -719,21 +717,21 @@
               "tool": "draft_visit_note",
               "args": {
                 "account_id": "ACC-00000",
-                "text": "Visit summary for Dr. Caracciolo (general practice, San Piero A Sieve): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress."
+                "text": "Visit summary for Dr. Caracciolo (general practice, Sant'Albino): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress."
               },
               "result": {
-                "id": 4,
+                "id": 7,
                 "account_id": "ACC-00000",
-                "text": "Visit summary for Dr. Caracciolo (general practice, San Piero A Sieve): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress.",
+                "text": "Visit summary for Dr. Caracciolo (general practice, Sant'Albino): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress.",
                 "status": "draft",
                 "created_by": "luca",
                 "via_agent": "agent-crm-assistant",
-                "correlation_id": "corr-a3132066b981",
-                "created_at": "2026-11-23T07:35:15.444582+00:00"
+                "correlation_id": "corr-307917d8589c",
+                "created_at": "2026-11-23T10:34:35.760374+00:00"
               }
             }
           ],
-          "answer": "Visit summary for Dr. Caracciolo (general practice, San Piero A Sieve): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress."
+          "answer": "Visit summary for Dr. Caracciolo (general practice, Sant'Albino): 4 recent visits. Last on 2026-08-08, outcome 'neutral', products Renalis, Glucomed. Suggested next step: Invite to the regional congress."
         }
       }
     ]
