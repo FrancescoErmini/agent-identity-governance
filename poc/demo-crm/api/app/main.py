@@ -1,13 +1,17 @@
+import json
+import os
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from .audit import AuditMiddleware, mark
 from .auth import caller, require_role
 from .db import conn
 from .seed import seed
 
-app = FastAPI(title="demo-crm API", version="0.1.0")
+app = FastAPI(title="demo-crm API", version="0.2.0")
+app.add_middleware(AuditMiddleware)
 
 
 @app.on_event("startup")
@@ -45,7 +49,8 @@ def _own_account(c, account_id: str, who: dict) -> dict:
 
 
 @app.get("/accounts/{account_id}")
-def get_account(account_id: str, who: dict = Depends(caller)):
+def get_account(account_id: str, request: Request, who: dict = Depends(caller)):
+    mark(request, f"account:{account_id}")
     require_role(who, "rep")
     with conn() as c:
         acc = _own_account(c, account_id, who)
@@ -62,16 +67,18 @@ class NoteIn(BaseModel):
 
 
 @app.post("/notes", status_code=201)
-def create_note(body: NoteIn, who: dict = Depends(caller)):
+def create_note(body: NoteIn, request: Request, who: dict = Depends(caller)):
     require_role(who, "rep")
     status = "draft" if who["agent"] else body.status  # agents never write final notes
     with conn() as c:
         _own_account(c, body.account_id, who)
-        return c.execute(
+        note = c.execute(
             "INSERT INTO notes (account_id, text, status, created_by, via_agent, correlation_id) "
             "VALUES (%s, %s, %s, %s, %s, %s) RETURNING *",
             (body.account_id, body.text, status, who["user"], who["agent"], who["correlation_id"]),
         ).fetchone()
+    mark(request, f"note:{note['id']} ({status})")
+    return note
 
 
 @app.get("/notes")
@@ -94,7 +101,8 @@ def team_report(who: dict = Depends(caller)):
 
 
 @app.post("/notes/{note_id}/confirm")
-def confirm_note(note_id: int, who: dict = Depends(caller)):
+def confirm_note(note_id: int, request: Request, who: dict = Depends(caller)):
+    mark(request, f"note:{note_id}")
     require_role(who, "rep")
     if who["agent"]:
         raise HTTPException(403, "only the rep confirms a note, never an agent")
@@ -125,17 +133,19 @@ class ReminderIn(BaseModel):
 
 
 @app.post("/reminders", status_code=201)
-def create_reminder(body: ReminderIn, who: dict = Depends(caller)):
+def create_reminder(body: ReminderIn, request: Request, who: dict = Depends(caller)):
     require_role(who, "dq-agent")
     with conn() as c:
         visit = c.execute("SELECT * FROM visits WHERE id = %s", (body.visit_id,)).fetchone()
         if not visit:
             raise HTTPException(404, "visit not found")
-        return c.execute(
+        reminder = c.execute(
             "INSERT INTO reminders (visit_id, rep, text, created_by, via_agent, correlation_id) "
             "VALUES (%s, %s, %s, %s, %s, %s) RETURNING *",
             (body.visit_id, visit["rep"], body.text, who["user"], who["agent"], who["correlation_id"]),
         ).fetchone()
+    mark(request, f"reminder:{reminder['id']} for {visit['rep']}")
+    return reminder
 
 
 @app.get("/reminders")
@@ -146,3 +156,42 @@ def list_reminders(who: dict = Depends(caller)):
             "SELECT r.*, a.name AS account_name FROM reminders r JOIN visits v ON v.id = r.visit_id "
             "JOIN accounts a ON a.id = v.account_id WHERE r.rep = %s ORDER BY r.created_at DESC LIMIT 50",
             (who["user"],)).fetchall()
+
+
+# --- audit ------------------------------------------------------------------------------------
+@app.get("/audit")
+def audit(actor_type: str | None = None, person: str | None = None, agent: str | None = None,
+          correlation_id: str | None = None, outcome: str | None = None, writes_only: bool = False, limit: int = 100,
+          who: dict = Depends(caller)):
+    """Who did what, with the JWT that came in. For area managers, and only as themselves (no agent)."""
+    require_role(who, "area-manager")
+    if who["agent"]:
+        raise HTTPException(403, "the audit trail is not open to agents")
+    where, args = [], []
+    for col, val in (("actor_type", actor_type), ("person", person), ("agent", agent),
+                     ("correlation_id", correlation_id), ("outcome", outcome)):
+        if val:
+            where.append(f"{col} = %s")
+            args.append(val)
+    if writes_only:
+        where.append("(method <> 'GET' OR outcome <> 'allowed')")  # changes, plus any refusal
+    sql = "SELECT * FROM audit_events" + (" WHERE " + " AND ".join(where) if where else "")
+    with conn() as c:
+        return c.execute(sql + " ORDER BY id DESC LIMIT %s", (*args, min(limit, 500))).fetchall()
+
+
+@app.get("/audit/gateway")
+def audit_gateway(correlation_id: str | None = None, limit: int = 50, who: dict = Depends(caller)):
+    """The JWTs LiteLLM saw (decoded, written by its auth hook), to set beside the JWT that reached this API."""
+    require_role(who, "area-manager")
+    if who["agent"]:
+        raise HTTPException(403, "the audit trail is not open to agents")
+    try:
+        with open(os.environ.get("GATEWAY_JWT_LOG", "/var/log/gateway/jwt.jsonl")) as f:
+            lines = f.readlines()
+    except OSError:
+        return []
+    rows = [json.loads(line) for line in lines if line.strip()]
+    if correlation_id:
+        rows = [r for r in rows if r.get("correlation_id") == correlation_id]
+    return rows[::-1][:min(limit, 500)]
