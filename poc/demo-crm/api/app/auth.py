@@ -11,6 +11,20 @@ CLIENT_ID = "demo-crm"
 _jwks = jwt.PyJWKClient(f"{ISSUER}/protocol/openid-connect/certs", cache_keys=True)
 
 
+def inspect_token(token: str) -> dict:
+    """Header and claims of a token, verified when possible; unverified claims are still shown, flagged."""
+    out = {"header": None, "claims": None, "verified": False, "error": None}
+    try:
+        out["header"] = jwt.get_unverified_header(token)
+        out["claims"] = jwt.decode(token, options={"verify_signature": False})
+        key = _jwks.get_signing_key_from_jwt(token).key
+        out["claims"] = jwt.decode(token, key, algorithms=["RS256"], audience=AUDIENCE, issuer=ISSUER)
+        out["verified"] = True
+    except jwt.PyJWTError as exc:
+        out["error"] = str(exc)
+    return out
+
+
 def caller(request: Request) -> dict:
     header = request.headers.get("authorization", "")
     if not header.lower().startswith("bearer "):

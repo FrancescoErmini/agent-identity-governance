@@ -28,6 +28,19 @@ CREATE TABLE IF NOT EXISTS reminders (
   created_by TEXT NOT NULL, via_agent TEXT, correlation_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS audit_events (
+  id BIGSERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  method TEXT NOT NULL, path TEXT NOT NULL, status INT NOT NULL, outcome TEXT NOT NULL, detail TEXT,
+  actor_type TEXT NOT NULL, person TEXT, person_sub TEXT, agent TEXT, source TEXT,
+  correlation_id TEXT, object TEXT,
+  token_header JSONB, token_claims JSONB, token_verified BOOLEAN NOT NULL, token_error TEXT
+);
+-- append-only: the API never updates or deletes audit rows
+CREATE OR REPLACE FUNCTION audit_append_only() RETURNS trigger LANGUAGE plpgsql AS
+  $$ BEGIN RAISE EXCEPTION 'audit_events is append-only'; END $$;
+DROP TRIGGER IF EXISTS audit_no_change ON audit_events;
+CREATE TRIGGER audit_no_change BEFORE UPDATE OR DELETE ON audit_events
+  FOR EACH ROW EXECUTE FUNCTION audit_append_only();
 """
 
 

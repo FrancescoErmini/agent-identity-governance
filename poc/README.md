@@ -11,6 +11,7 @@ It is built in steps. Each step ends with a check script that passes from a clea
 | **2 · Agents** ✓ | MCP server, UI with “via agent” badges, `agent-dq`, `crm-assistant` with token exchange | `tests/step2_check.py`: acts 1–4, 16 checks |
 | **3 · Controls** ✓ | “Draft only” guardrail at the gateway, direct-call test, kill switch | `tests/demo_check.py`: the seven acts, 13 checks |
 | **4 · Demo pack** ✓ | [Demo script](DEMO.md) (Italian), evidence of every act | `evidence/sample-2026-11-22/` |
+| **5 · Audit** ✓ | Notes written by hand (AS-IS), an append-only audit trail in demo-crm with the JWT that reached the API, the JWTs LiteLLM saw, and an **Audit** tab in the UI | `tests/audit_check.py`: 13 checks |
 
 ## Run it
 
@@ -24,7 +25,7 @@ docker compose --profile check run --rm check
 ```
 
 The last command should end with `21/21 checks passed`, `16/16 checks passed` and
-`Demo: 13/13 checks passed`.
+`Demo: 13/13 checks passed` and `Audit: 13/13 checks passed`.
 
 To use the UI, add this line to `/etc/hosts` once (`sudo nano /etc/hosts` on a Mac). Tokens are
 issued for `sso.demo.local`, so the name must match inside and outside Docker:
@@ -103,6 +104,22 @@ run by the operator.
 | 5 | “Try a tool it doesn't have”, then “try a final note” | LiteLLM: tool not on the team's list; guardrail `agents-draft-only` |
 | 6 | “Bypass the gateway”: the final note sent straight to demo-crm | demo-crm stores it as a draft anyway |
 | 7 | `./scripts/kill-switch.sh block`, then any assistant button; `unblock` to restore | LiteLLM refuses the blocked team; the log shows `sub` and agent for every call |
+
+## Audit: who did what, with which JWT
+
+demo-crm records every API call in `audit_events` (append-only: a database trigger refuses updates and deletes):
+who called, read from the token (a person by hand, a person *through* an agent, or an autonomous agent), the
+action, the record, the outcome and the refusal reason, where the call came from (resolved from the network:
+the UI, the MCP server behind LiteLLM, or an agent calling directly), and the JWT that came in: header and
+decoded claims, with the result of the signature check. The raw token is never stored.
+
+On the gateway side, the LiteLLM auth hook writes the decoded JWTs it checks (the agent's own admission
+token and the token it forwards to the MCP server) to a JSON-lines log (`GATEWAY_JWT_LOG`). This needs no
+LiteLLM Enterprise licence.
+
+In the UI, area managers (Luca) get an **Audit** tab. Click a row to see the JWT at the API next to the JWTs at
+LiteLLM for the same correlation id: same `jti`, `sub` = the person, `act` = the agent. A call that bypassed the
+gateway shows no JWT at LiteLLM. API: `GET /audit` and `GET /audit/gateway` (area managers, not agents).
 
 ## How the agents prove who they are
 
