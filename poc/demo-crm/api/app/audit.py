@@ -24,6 +24,7 @@ SOURCES = {
     "crm-assistant": "crm-assistant, direct",
     "agent-dq": "agent-dq, direct",
     "check-run": "test script",
+    "evidence-run": "test script",
 }
 
 

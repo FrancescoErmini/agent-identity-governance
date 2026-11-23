@@ -163,8 +163,9 @@ async function loadAudit() {
   if ($("f-actor").value) q.set("actor_type", $("f-actor").value);
   if ($("f-writes").checked) q.set("writes_only", "true");
   if ($("f-refused").checked) q.set("outcome", "refused");
-  const { ok, body } = await call(`/api/audit?${q}`);
   const tbody = $("audit-table").querySelector("tbody");
+  tbody.innerHTML = `<tr><td colspan="6" class="muted">Loading…</td></tr>`;
+  const { ok, body } = await call(`/api/audit?${q}`);
   if (!ok) { tbody.innerHTML = `<tr><td colspan="6" class="refused">${esc(body?.detail || "error")}</td></tr>`; return; }
   tbody.innerHTML = body.map((r, i) => `<tr class="row" data-i="${i}">
       <td class="small">${esc(new Date(r.at).toLocaleTimeString())}</td><td>${who(r)}</td>

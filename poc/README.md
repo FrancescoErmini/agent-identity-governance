@@ -9,8 +9,8 @@ It is built in steps. Each step ends with a check script that passes from a clea
 | --- | --- | --- |
 | **1 · Stack and identity** ✓ | Keycloak realm, LiteLLM gateway that verifies Keycloak tokens, demo-crm API with synthetic data | `tests/step1_check.py`: 21 checks |
 | **2 · Agents** ✓ | MCP server, UI with “via agent” badges, `agent-dq`, `crm-assistant` with token exchange | `tests/step2_check.py`: acts 1–4, 16 checks |
-| **3 · Controls** ✓ | “Draft only” guardrail at the gateway, direct-call test, kill switch | `tests/demo_check.py`: the seven acts, 13 checks |
-| **4 · Demo pack** ✓ | [Demo script](DEMO.md) (Italian), evidence of every act | `evidence/sample-2026-11-22/` |
+| **3 · Controls** ✓ | “Draft only” guardrail at the gateway, direct-call test, kill switch | `tests/demo_check.py`: the seven acts, 13 checks (15 with the AS-IS act) |
+| **4 · Demo pack** ✓ | [Demo script](DEMO.md) (Italian), evidence of every act | `evidence/sample-2026-11-23/` |
 | **5 · Audit** ✓ | Notes written by hand (AS-IS), an append-only audit trail in demo-crm with the JWT that reached the API, the JWTs LiteLLM saw, and an **Audit** tab in the UI | `tests/audit_check.py`: 13 checks |
 
 ## Run it
@@ -25,7 +25,7 @@ docker compose --profile check run --rm check
 ```
 
 The last command should end with `21/21 checks passed`, `16/16 checks passed` and
-`Demo: 13/13 checks passed` and `Audit: 13/13 checks passed`.
+`Demo: 15/15 checks passed` and `Audit: 13/13 checks passed`.
 
 To use the UI, add this line to `/etc/hosts` once (`sudo nano /etc/hosts` on a Mac). Tokens are
 issued for `sso.demo.local`, so the name must match inside and outside Docker:
@@ -65,7 +65,7 @@ node scripts/capture-screens.js evidence/run-<UTC time>/screens   # optional: on
 
 Each run folder holds `SUMMARY.md` (checks per act, LiteLLM log for Luca's `sub`), the assistant's responses
 (`acts.json`, with the delegated token's claims), the LiteLLM log and the demo-crm records. Run folders are
-git-ignored; [`evidence/sample-2026-11-22/`](evidence/sample-2026-11-22/) is a committed example.
+git-ignored; [`evidence/sample-2026-11-23/`](evidence/sample-2026-11-23/) is a committed example.
 
 ## What is in it
 

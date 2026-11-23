@@ -174,7 +174,7 @@ def audit(actor_type: str | None = None, person: str | None = None, agent: str |
             where.append(f"{col} = %s")
             args.append(val)
     if writes_only:
-        where.append("method <> 'GET'")
+        where.append("(method <> 'GET' OR outcome <> 'allowed')")  # changes, plus any refusal
     sql = "SELECT * FROM audit_events" + (" WHERE " + " AND ".join(where) if where else "")
     with conn() as c:
         return c.execute(sql + " ORDER BY id DESC LIMIT %s", (*args, min(limit, 500))).fetchall()
