@@ -99,7 +99,10 @@ async def _run(ask: "Ask", session, token: str, correlation_id: str) -> tuple[li
     elif ask.task == "chat":
         if not USE_MODEL:
             raise HTTPException(400, "free chat needs LLM_MODEL (see .env.example)")
-        answer = await _agent_loop(session, token, correlation_id, ask.message or "", steps)
+        message = ask.message or ""
+        if ask.account_id:                     # the account picked in the assistant app
+            message += f"\n\n(The account selected in the app is {ask.account_id}.)"
+        answer = await _agent_loop(session, token, correlation_id, message, steps)
     return steps, answer
 
 
@@ -124,11 +127,12 @@ async def _agent_loop(session, token: str, correlation_id: str, message: str, st
                                                "parameters": t.inputSchema}} for t in listed.tools]
     messages = [{"role": "system", "content": (
         "You help a sales rep with demo-crm. Use the tools. Notes are always saved as drafts for the rep "
-        "to confirm. You act with a delegated token that carries only the sales-rep role, even when the "
-        "rep has more roles. If a tool is refused (403 from demo-crm, or not allowed by the gateway), "
+        "to confirm. When the user asks for something a tool does, call that tool: never decide by "
+        "yourself that you may not, because demo-crm and the gateway check your delegated token and "
+        "decide. If a tool is refused (403 from demo-crm, or not allowed by the gateway), "
         "say that you, the assistant, are not allowed to do it on their behalf, and that they can do it "
         "themselves in demo-crm if their own role allows it. Never tell them they lack the permission. "
-        "Answer in the user's language.")},
+        "Always answer in the same language as the user's message.")},
                 {"role": "user", "content": message}]
     for _ in range(6):
         reply = await chat(token, correlation_id, MODEL, messages, tools)
